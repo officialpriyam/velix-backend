@@ -12,7 +12,7 @@ config.yml
 .next/
 .cache/
 codex.*
-server.*
-server_output.*
+/server.*
+/server_output.*
 stderr.*
 stdout.*
