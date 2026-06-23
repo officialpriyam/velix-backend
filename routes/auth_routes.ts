@@ -84,24 +84,30 @@ router.post('/logout', async (req, res) => {
 router.post('/oauth', asyncHandler(async (req, res) => {
     const { access_token } = req.body;
     if (!access_token) {
+        console.warn('[Auth] OAuth: No access_token provided');
         return res.status(400).json({ error: 'access_token is required' });
     }
 
     try {
+        console.log('[Auth] OAuth: Verifying access_token...');
         // Check if we already have this OAuth session cached
         const cachedSession = await cacheService.getCachedOAuthSession(access_token);
         let user: any;
 
         if (cachedSession) {
             user = cachedSession;
+            console.log('[Auth] OAuth: Cache hit for user', user?.id);
         } else {
             const payload = await AuthService.verifyToken(access_token);
             if (!payload) {
+                console.warn('[Auth] OAuth: Token verification failed');
                 return res.status(401).json({ error: 'Invalid or expired token' });
             }
+            console.log('[Auth] OAuth: Token verified for user', payload.userId);
 
             user = await dbService.getUserById(payload.userId);
             if (!user) {
+                console.log('[Auth] OAuth: Creating new user', payload.userId);
                 await dbService.createUser({
                     id: payload.userId,
                     email: payload.email,
@@ -117,9 +123,16 @@ router.post('/oauth', asyncHandler(async (req, res) => {
             }
         }
 
+        if (!user) {
+            console.error('[Auth] OAuth: Failed to get or create user');
+            return res.status(500).json({ error: 'Failed to authenticate user' });
+        }
+
+        console.log('[Auth] OAuth: Setting cookie and returning user', user.id);
         res.cookie('token', access_token, sessionCookieOptions);
         res.json({ user });
     } catch (error: any) {
+        console.error('[Auth] OAuth error:', error.message);
         res.status(500).json({ error: error.message });
     }
 }));
