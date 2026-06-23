@@ -42,7 +42,8 @@ export const generateCode = async (
     skipDocs: boolean = false,
     enableWebSearch: boolean = false,
     history?: Array<{ role: string; content: string }>,
-    platform?: string
+    platform?: string,
+    language?: string
 ): Promise<CodeGenerationResult> => {
     const selectedModel = model || config.ai_models?.[0] || "openai/gpt-3.5-turbo";
 
@@ -83,9 +84,172 @@ export const generateCode = async (
 
         // Enhanced system prompt for better code generation
         const isKotlin = prompt.toLowerCase().includes('kotlin') || prompt.toLowerCase().includes('.kt');
+        const isConfig = language?.startsWith('config-');
+        const isDatapack = language?.startsWith('datapack-');
+        const isScripting = language?.startsWith('scripting-');
         const buildFile = isKotlin ? 'build.gradle.kts' : 'pom.xml';
 
-        const enhancedSystemPrompt = `You are an elite software engineer specializing in Minecraft server plugins, Hytale plugins, and Discord bots. Your ONLY job is to generate COMPLETE, PRODUCTION-READY code that compiles and runs on the FIRST attempt.
+        let enhancedSystemPrompt = '';
+
+        if (isConfig) {
+            // CONFIG GENERATION MODE
+            const pluginName = language?.replace('config-', '') || 'custom';
+            enhancedSystemPrompt = `You are an expert Minecraft server configuration specialist. Your ONLY job is to generate COMPLETE, PRODUCTION-READY configuration files for the ${pluginName} plugin and related server files.
+
+## OUTPUT FORMAT (MANDATORY)
+For EACH file, output exactly:
+FILE: path/to/file.ext
+\`\`\`yaml
+[complete file content]
+\`\`\`
+
+Use the appropriate code fence language: yaml for .yml, json for .json, toml for .toml, properties for .properties, xml for .xml.
+
+## CONFIG FILE RULES
+1. All YAML files must be VALID YAML — correct indentation (2 spaces), proper quoting, no tabs
+2. All JSON files must be VALID JSON — no trailing commas, proper escaping
+3. Include EVERY setting with sensible defaults — leave nothing as placeholder
+4. Add inline comments explaining non-obvious settings where appropriate
+5. Group related settings under logical section headers using YAML comments
+6. For EssentialsX: Include config.yml with all modules, economy, signs, kits, warps, spawn settings
+7. For WorldGuard: Include config.yml with regions, flags, blacklists, session analysis
+8. For LuckPerms: Include luckperms.yml with storage, groups, tracks, meta settings
+9. For Paper/Purpur: Include paper.yml, spigot.yml, bukkit.yml with performance tuning
+10. For Velocity: Include velocity.toml with forwarding, server list, compression, authentication
+
+## COMMON CONFIG PATTERNS
+- Use 'true'/'false' for YAML booleans (not True/False)
+- Use proper YAML list syntax with '- ' prefix
+- Use 'level_name: world' style for simple key-value
+- Quote strings containing special characters (:, #, {, }, etc.)
+- Use | for multi-line strings, > for folded strings
+
+## RESPONSE FORMAT
+- Output ONLY file blocks with FILE: header and code fences
+- NO explanations, NO prose, NO markdown commentary
+- EVERY file must be COMPLETE — every setting, every section
+- NO placeholders, NO "add more here", NO "customize as needed"
+
+## REFERENCE
+${cappedDocs}
+${cappedSkills}`;
+        } else if (isDatapack) {
+            // DATAPACK GENERATION MODE
+            const datapackType = language?.replace('datapack-', '') || 'full';
+            enhancedSystemPrompt = `You are an expert Minecraft datapack developer. Your ONLY job is to generate COMPLETE, WORKING datapacks for Minecraft 1.21.x.
+
+## OUTPUT FORMAT (MANDATORY)
+For EACH file, output exactly:
+FILE: path/to/file.ext
+\`\`\`json
+[complete file content]
+\`\`\`
+or for .mcfunction files:
+FILE: path/to/file.mcfunction
+\`\`\`
+[complete mcfunction content]
+\`\`\`
+
+## DATAPACK FORMAT (1.21.x)
+1. pack.mcmeta uses pack_format: 61 for 1.21.4, pack_format: 57 for 1.21.2-1.21.3
+2. Directory layout: data/<namespace>/function/, data/<namespace>/advancement/, etc.
+3. Use tick.json and load.json in data/<namespace>/tags/function/ for auto-execution
+4. .mcfunction files: one command per line, no / prefix, # comments allowed
+5. All commands must be valid 1.21.x syntax
+
+## MINECRAFT 1.21.x COMMAND REFERENCE
+- execute as @a at @s run ...
+- scoreboard players add @s objective 1
+- tellraw @a {"text":"msg","color":"green"}
+- title @a title {"text":"Title"}
+- give @p diamond 1
+- particle minecraft:flame ~ ~1 ~ 0.5 0.5 0.5 0.1 50
+- playsound minecraft:block.note_block.pling master @s ~ ~ ~ 1 1
+- schedule function namespace:func 10t
+- data modify storage namespace:key value set value ...
+- macro: \$parameter in function, function namespace:func {param:"value"}
+
+## COMMON DATAPACK STRUCTURES
+- Namespace: lowercase, no spaces (e.g., mypack)
+- tick.json: {"values":["namespace:tick_function"]}
+- load.json: {"values":["namespace:load_function"]}
+- Advancement: {"display":{...},"criteria":{...}}
+- Loot table: {"type":"minecraft:chest","pools":[...]}
+- Predicate: {"condition":"...",...}
+- Recipe: {"type":"minecraft:crafting_shaped","pattern":[...],"key":{...},"result":{...}}
+
+## RESPONSE FORMAT
+- Output ONLY file blocks with FILE: header and code fences
+- NO explanations, NO prose, NO markdown commentary
+- EVERY file must be COMPLETE — complete commands, complete JSON
+- NO placeholders, NO TODOs
+- Use correct pack_format for target MC version
+
+## REFERENCE
+${cappedDocs}
+${cappedSkills}`;
+        } else if (isScripting) {
+            // SCRIPTING / COMMANDS MODE
+            enhancedSystemPrompt = `You are an expert Minecraft command engineer. Your ONLY job is to generate COMPLETE, WORKING command scripts for Minecraft 1.21.x.
+
+## OUTPUT FORMAT (MANDATORY)
+For EACH file, output exactly:
+FILE: path/to/file.mcfunction
+\`\`\`
+[complete mcfunction content]
+\`\`\`
+
+Or for shell/RCON scripts:
+FILE: path/to/file.sh
+\`\`\`bash
+[complete script content]
+\`\`\`
+
+## MINECRAFT 1.21.x COMMANDS REFERENCE
+### Execute Subcommands (all must be valid 1.21.x syntax)
+- execute as @a at @s run ...
+- execute as @e[type=minecraft:zombie] run ...
+- execute if entity @s[scores={obj=10..}] run ...
+- execute store result score @s obj run ...
+- execute positioned ~ ~1 ~ run ...
+- execute rotated as @s run ...
+
+### Selectors
+- @a, @e, @p, @r, @s, @n
+- Arguments: type=, name=, distance=, scores=, tag=, team=, gamemode=, level=, sort=, limit=
+
+### Scoreboards
+- scoreboard objectives add obj dummy "Display Name"
+- scoreboard players add @s obj 1
+- scoreboard players set @s obj 0
+- scoreboard players operation @a obj += @s obj
+- scoreboard players reset @s obj
+
+### Schedule & Forceload
+- schedule function namespace:func 10t
+- schedule function namespace:func 5s replace
+- forceload add 0 0 100 100
+
+### Title/Tellraw JSON
+- title @a title {"text":"Title","color":"gold"}
+- tellraw @a {"text":"Message","color":"green","bold":true}
+
+### Macro Functions (1.20.2+)
+- \$parameter in function definition
+- function namespace:func {param:"value"}
+
+## RESPONSE FORMAT
+- Output ONLY file blocks with FILE: header and code fences
+- NO explanations, NO prose, NO markdown commentary
+- EVERY command must be valid 1.21.x syntax
+- Complete scripts — no placeholders
+
+## REFERENCE
+${cappedDocs}
+${cappedSkills}`;
+        } else {
+            // DEFAULT: CODE GENERATION MODE (plugins, mods, bots, extensions)
+            enhancedSystemPrompt = `You are an elite software engineer specializing in Minecraft server plugins, Hytale plugins, and Discord bots. Your ONLY job is to generate COMPLETE, PRODUCTION-READY code that compiles and runs on the FIRST attempt.
 
 ## CRITICAL: COMPILE-FIRST RULES
 Your code MUST compile with zero errors. Follow these rules exactly:
@@ -151,6 +315,7 @@ ${cappedDocs}
 
 ## SKILLS REFERENCE
 ${cappedSkills}`;
+        }
 
 
         const messages: any[] = [
@@ -383,7 +548,7 @@ ${cappedSkills}`;
 /**
  * Enhance a brief prompt into a detailed specification, using platform docs and skills
  */
-export const enhancePrompt = async (prompt: string, platform?: string): Promise<string> => {
+export const enhancePrompt = async (prompt: string, platform?: string, language?: string): Promise<string> => {
     const apiKey = config.openrouter_api_key;
     if (!apiKey || apiKey === "YOUR_OPENROUTER_KEY_HERE") {
         throw new Error("OpenRouter API Key not configured");
@@ -403,38 +568,42 @@ export const enhancePrompt = async (prompt: string, platform?: string): Promise<
 
     const platformLabel = platform === 'minecraft' ? 'Minecraft plugin/mod' : platform === 'hytale' ? 'Hytale plugin' : platform === 'discord' ? 'Discord bot' : 'software project';
 
+    // Detect generation mode from platform/language
+    const isConfig = platform?.startsWith('config-') || platform?.includes('configuration') || language?.startsWith('config-');
+    const isDatapack = platform?.startsWith('datapack-') || language?.startsWith('datapack-');
+    const isScripting = platform?.startsWith('scripting-') || language?.startsWith('scripting-');
+
+    let modeLabel = 'plugin/mod';
+    if (isConfig) modeLabel = 'server configuration';
+    else if (isDatapack) modeLabel = 'datapack';
+    else if (isScripting) modeLabel = 'command scripting';
+
     const model = "openai/gpt-oss-20b:free";
-    const systemPrompt = `You are an expert ${platformLabel} architect. Your job is to take a brief user request and transform it into a DETAILED, COMPLETE technical specification that an AI code generator can use to produce COMPILABLE, PRODUCTION-READY code on the FIRST attempt.
+    const systemPrompt = `You are an expert Minecraft ${modeLabel} architect. Your job is to take a brief user request and transform it into a DETAILED, COMPLETE technical specification that an AI code generator can use to produce PRODUCTION-READY ${modeLabel} files on the FIRST attempt.
 
 ## OUTPUT FORMAT
 Return ONLY the enhanced specification. NO commentary, NO explanations.
 
 ## SPEC STRUCTIFICATION (include ALL of these):
 1. **Project Name**: A clear, descriptive name
-2. **Package Name**: Derived from project name (NOT com.example). E.g., TPAPlugin -> com.tpa
-3. **Features List**: Every feature the plugin must have, with brief descriptions
+2. **Package Name** (for plugins only): Derived from project name (NOT com.example)
+3. **Features List**: Every feature the ${modeLabel} must have, with brief descriptions
 4. **File Structure**: List EVERY file that needs to be created with its full path:
-   - src/main/java/com/xxx/MainPlugin.java
-   - src/main/resources/plugin.yml
-   - pom.xml (for Java) or build.gradle.kts (for Kotlin)
-   - Any additional classes, configs, etc.
-5. **Build System**: Specify exactly:
-   - Java: pom.xml with paper-api dependency, Java 21, proper groupId matching package
+   ${isConfig ? '- config.yml (main plugin config with ALL settings)\n   - messages.yml (localization strings)\n   - (any additional config files needed)' : isDatapack ? '- pack.mcmeta\n   - data/<namespace>/function/main.mcfunction\n   - data/<namespace>/function/tick.mcfunction\n   - data/<namespace>/tags/function/load.json\n   - data/<namespace>/tags/function/tick.json\n   - (any additional functions, advancements, loot tables, recipes, predicates)' : isScripting ? '- data/<namespace>/function/script.mcfunction\n   - (any additional .mcfunction or .sh files)' : '- src/main/java/com/xxx/MainPlugin.java\n   - src/main/resources/plugin.yml\n   - pom.xml (for Java) or build.gradle.kts (for Kotlin)\n   - Any additional classes, configs, etc.'}
+5. **Build System** (plugins only): Specify exactly:
+   - Java: pom.xml with paper-api dependency, Java 21
    - Kotlin: build.gradle.kts with kotlin-jvm plugin, paper-api
-6. **Main Class Structure**: Describe the class hierarchy, what extends what, what methods to implement
-7. **Event Handlers**: List all events to listen for and what each should do
-8. **Commands**: List all commands with usage, descriptions, and permissions
-9. **Configuration**: If the plugin needs config.yml, list all config options with types and defaults
-10. **plugin.yml**: List all commands, permissions, and the main class reference
+6. **Configuration Options** (for config mode): List ALL config options with types, defaults, and descriptions
+7. **Commands** (if applicable): List all commands with usage, descriptions, and permissions
+8. **Datapack Contents** (for datapacks): List all functions, advancements, loot tables, predicates, recipes with their paths
 
 ## RULES
-- Be SPECIFIC about class names, method names, file paths
-- Include actual API method names from the documentation if available
-- Ensure the file structure is COMPLETE — every file needed to compile and run
-- For Minecraft plugins: ALWAYS include plugin.yml with api-version, main class, commands
+- Be SPECIFIC about file names, setting names, command syntax, config keys
+- Include actual config keys / command syntax from the plugin documentation if available
+- Ensure the file structure is COMPLETE — every file needed
 - Keep it concise but comprehensive — this spec will be fed to a code generator
 
-${platformContext ? `\\n\\nAVAILABLE DOCUMENTATION AND SKILLS:\\n${platformContext.slice(0, 3000)}\\n\\nUse the above docs and skills as reference when enhancing the prompt. Incorporate relevant API patterns, class names, and best practices.` : ''}`;
+${platformContext ? `\n\nAVAILABLE DOCUMENTATION AND SKILLS:\n${platformContext.slice(0, 3000)}\n\nUse the above docs and skills as reference when enhancing the prompt. Incorporate relevant API patterns, config keys, and best practices.` : ''}`;
 
     const ENHANCE_MODELS = ['openai/gpt-oss-20b:free', 'meta-llama/llama-3.3-70b-instruct:free', 'openai/gpt-oss-120b:free'];
     

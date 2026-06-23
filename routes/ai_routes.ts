@@ -19,11 +19,11 @@ const router = Router();
  * Enhance prompt into a specification
  */
 router.post('/enhance-prompt', asyncHandler(async (req, res) => {
-    const { prompt, platform } = req.body;
+    const { prompt, platform, language } = req.body;
     if (!prompt) return res.status(400).json({ error: "Prompt is required" });
 
     try {
-        const enhanced = await enhancePrompt(prompt, platform);
+        const enhanced = await enhancePrompt(prompt, platform, language);
         res.json({ enhanced });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -79,7 +79,7 @@ router.post('/generate', asyncHandler(requireAuth), asyncHandler(async (req, res
             }
         }
 
-        const result = await generateCode(prompt, model, context, skipDocs, enableWebSearch === true, history, platform);
+        const result = await generateCode(prompt, model, context, skipDocs, enableWebSearch === true, history, platform, language);
         files = result.files || [];
         rawResponse = result.rawResponse || '';
         modelUsed = result.model || model;
