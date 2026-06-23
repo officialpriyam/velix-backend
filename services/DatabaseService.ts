@@ -141,7 +141,7 @@ class DatabaseService {
         }
     }
 
-    public async createProject(project: { id: string; userId: string; name: string; language?: string; model?: string }) {
+    public async createProject(project: { id: string; userId: string; name: string; language?: string; model?: string; thumbnail?: string }) {
         const existing = await this.getProjectById(project.id);
         if (existing) {
             return this.update('projects', { id: project.id }, {
@@ -155,8 +155,13 @@ class DatabaseService {
             user_id: project.userId,
             name: project.name,
             language: project.language || 'java',
-            model: project.model || null
+            model: project.model || null,
+            thumbnail: project.thumbnail || null
         });
+    }
+
+    public async updateProjectThumbnail(projectId: string, thumbnail: string) {
+        return this.update('projects', { id: projectId }, { thumbnail });
     }
 
     public async getProjectsByUserId(userId: string) {

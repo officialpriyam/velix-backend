@@ -8,6 +8,7 @@ import { pluginManager } from '../services/PluginManager';
 import { AuthService } from '../services/AuthService';
 import { dbService } from '../services/DatabaseService';
 import { SandboxContext } from '../services/SandboxService';
+import { generateProjectThumbnail } from '../services/ThumbnailService';
 import { WebSearchService } from '../services/WebSearchService';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -127,6 +128,16 @@ router.post('/generate', asyncHandler(requireAuth), asyncHandler(async (req, res
             language: language || 'java',
             model: model
         });
+
+        // Generate thumbnail async (non-blocking, fire-and-forget)
+        generateProjectThumbnail(language || 'java', plugin?.name || 'New Project')
+            .then(async (thumbnail) => {
+                if (thumbnail) {
+                    await dbService.updateProjectThumbnail(sessionId, thumbnail);
+                    console.log(`[Thumbnail] Generated for project ${sessionId}`);
+                }
+            })
+            .catch((err) => console.warn('[Thumbnail] Failed:', err.message));
     } catch (e: any) {
         console.warn('[AI Routes] Failed to create project record:', e.message);
     }
@@ -533,7 +544,8 @@ router.post('/fork/:id', asyncHandler(requireAuth), asyncHandler(async (req, res
             userId: req.auth!.userId,
             name: `${project.name} (Forked)`,
             language: project.language,
-            model: project.model
+            model: project.model,
+            thumbnail: project.thumbnail || undefined
         });
 
         // 2. Clone sandbox files
