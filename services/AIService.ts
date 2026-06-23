@@ -48,13 +48,13 @@ export const generateCode = async (
 
     // Free fallback models ranked by coding ability
     const FREE_FALLBACK_MODELS = [
-        'openai/gpt-oss-120b:free',
-        'nvidia/nemotron-3-super-120b-a12b:free',
         'openai/gpt-oss-20b:free',
+        'openai/gpt-oss-120b:free',
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'qwen/qwen3-next-80b-a3b-instruct:free',
         'google/gemma-4-26b-a4b-it:free',
-        'qwen/qwen3-coder:free',
-        'nousresearch/hermes-3-llama-3.1-405b:free',
-        'google/gemma-4-31b-it:free'
+        'google/gemma-4-31b-it:free',
+        'nousresearch/hermes-3-llama-3.1-405b:free'
     ];
 
     const tryGenerate = async (modelName: string): Promise<CodeGenerationResult> => {
@@ -326,24 +326,8 @@ CRITICAL INSTRUCTIONS:
         const isContextError = errMsg.includes('context_length') || errMsg.includes('maximum context') || errMsg.includes('too long');
         const isRateLimit = primaryError?.response?.status === 429 || errMsg.includes('rate limit');
         console.warn(`[AIService] Primary model ${selectedModel} failed:`, errMsg);
-        if (isContextError) console.warn(`[AIService] Context length exceeded — will try smaller context on fallbacks`);
+        if (isContextError) console.warn(`[AIService] Context length exceeded`);
         if (isRateLimit) console.warn(`[AIService] Rate limited — waiting before fallback`);
-        
-        // If context length error, retry with heavily truncated context before switching models
-        if (isContextError) {
-            try {
-                console.log(`[AIService] Retrying ${selectedModel} with truncated context...`);
-                const truncatedHistory = history?.slice(-4).map(m => ({
-                    ...m,
-                    content: m.content.length > 500 ? m.content.slice(0, 500) + '...' : m.content
-                })) || [];
-                const truncatedPrompt = prompt.length > 1500 ? prompt.slice(0, 1500) + '...' : prompt;
-                const result = await tryGenerate(selectedModel);
-                return result;
-            } catch (retryErr: any) {
-                console.warn(`[AIService] Truncated retry also failed:`, retryErr.message);
-            }
-        }
 
         // Rate limit: wait longer before fallback
         if (isRateLimit) {
@@ -423,7 +407,7 @@ OUTPUT FORMAT for the enhanced prompt should clearly list:
 5. Main class structure
 6. Any config.yml or plugin.yml requirements`;
 
-    const ENHANCE_MODELS = ['openai/gpt-oss-20b:free', 'openai/gpt-oss-120b:free', 'nvidia/nemotron-3-super-120b-a12b:free'];
+    const ENHANCE_MODELS = ['openai/gpt-oss-20b:free', 'meta-llama/llama-3.3-70b-instruct:free', 'openai/gpt-oss-120b:free'];
     
     for (let attempt = 0; attempt < ENHANCE_MODELS.length; attempt++) {
         const tryModel = ENHANCE_MODELS[attempt];

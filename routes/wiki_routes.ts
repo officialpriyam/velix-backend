@@ -81,7 +81,7 @@ router.post('/projects/:projectId/generate', asyncHandler(requireAuth), asyncHan
 
     const user = req.auth!.user;
     if (user.credits < 5) {
-        return res.status(402).json({ error: 'Insufficient credits. Wiki generation requires 5 credits.' });
+        return res.status(402).json({ error: 'Insufficient credits. Wiki generation requires 5 credits. Buy more credits to continue.' });
     }
 
     try {
@@ -146,7 +146,7 @@ RULES:
 - Do NOT use marketing language
 - Be specific and concrete`;
 
-        const result = await generateCode(prompt, 'openai/gpt-oss-120b:free', systemPrompt, true, false);
+        const result = await generateCode(prompt, 'openai/gpt-oss-20b:free', systemPrompt, true, false);
 
         const slug = (prompt || wikiType).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50).replace(/^-|-$/g, '');
         const pageTitle = prompt.slice(0, 100) || `${wikiType} documentation`;

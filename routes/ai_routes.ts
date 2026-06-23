@@ -41,8 +41,8 @@ router.post('/generate', requireAuth, asyncHandler(async (req, res) => {
 
     const user = req.auth!.user;
 
-    if (user.credits < 5) {
-        return res.status(402).json({ error: "Insufficient credits. Code generation requires 5 credits." });
+    if (user.credits < 20) {
+        return res.status(402).json({ error: "Insufficient credits. Code generation requires 20 credits. Buy more credits to continue." });
     }
 
     const plugin = pluginManager.getPlugin(language || 'java');
@@ -79,7 +79,7 @@ router.post('/generate', requireAuth, asyncHandler(async (req, res) => {
         }
 
         // Deduct credits and save history
-        await dbService.deductCredits(req.auth!.userId, 5, 'generation', `Generated code for ${plugin?.name || "Project"}`);
+        await dbService.deductCredits(req.auth!.userId, 20, 'generation', `Generated code for ${plugin?.name || "Project"}`);
         const updatedUser = await dbService.getUserById(req.auth!.userId);
 
         await dbService.createProject({
@@ -110,7 +110,7 @@ router.post('/generate', requireAuth, asyncHandler(async (req, res) => {
             files: result.files,
             model: result.model,
             rawResponse: result.rawResponse,
-            creditsUsed: 5,
+            creditsUsed: 20,
             creditsRemaining: updatedUser.credits
         });
     } catch (error: any) {
@@ -153,8 +153,8 @@ router.post('/generate-and-compile', asyncHandler(requireAuth), asyncHandler(asy
 
     const user = req.auth!.user;
 
-    if (user.credits < 5) {
-        return res.status(402).json({ error: "Insufficient credits. Code generation requires 5 credits." });
+    if (user.credits < 20) {
+        return res.status(402).json({ error: "Insufficient credits. Code generation requires 20 credits. Buy more credits to continue." });
     }
 
     try {
@@ -167,7 +167,7 @@ router.post('/generate-and-compile', asyncHandler(requireAuth), asyncHandler(asy
         });
 
         const plugin = pluginManager.getPlugin(language);
-        await dbService.deductCredits(req.auth!.userId, 5, 'generation', `Generated & compiled ${plugin?.name || "Project"}`);
+        await dbService.deductCredits(req.auth!.userId, 20, 'generation', `Generated & compiled ${plugin?.name || "Project"}`);
         const updatedUser = await dbService.getUserById(req.auth!.userId);
 
         await dbService.createProject({
@@ -220,6 +220,7 @@ router.get('/languages', (req, res) => {
 
 /**
  * Get available AI models - live from NVIDIA API (OpenRouter optional)
+ * Only shows: all NVIDIA models + curated free OpenRouter models for coding
  */
 router.get('/models', asyncHandler(async (req, res) => {
     try {
@@ -240,7 +241,31 @@ router.get('/models', asyncHandler(async (req, res) => {
             .filter((r): r is PromiseFulfilledResult<any[]> => r.status === 'fulfilled')
             .flatMap(r => r.value);
 
-        if (all.length === 0) {
+        // Curated free models that are best for coding
+        const ALLOWED_FREE_MODELS = [
+            'openai/gpt-oss-20b:free',
+            'openai/gpt-oss-120b:free',
+            'meta-llama/llama-3.3-70b-instruct:free',
+            'qwen/qwen3-coder:free',
+            'qwen/qwen3-next-80b-a3b-instruct:free',
+            'google/gemma-4-26b-a4b-it:free',
+            'google/gemma-4-31b-it:free',
+            'nousresearch/hermes-3-llama-3.1-405b:free'
+        ];
+
+        // Admin override: comma-separated list of additional model IDs to allow
+        const extraModels = (process.env.EXTRA_ALLOWED_MODELS || '').split(',').map(s => s.trim()).filter(Boolean);
+
+        // Filter: keep all NVIDIA models, only curated free OpenRouter models
+        const filtered = all.filter(m => {
+            if (m.provider === 'nvidia') return true;
+            if (m.id.endsWith(':free')) return ALLOWED_FREE_MODELS.includes(m.id) || extraModels.includes(m.id);
+            return false;
+        });
+
+        console.log(`[AI Routes] Models: ${all.length} total → ${filtered.length} shown (NVIDIA + curated free)`);
+
+        if (filtered.length === 0) {
             const fallback = (config.nvidia_models || []).map((m: string) => ({
                 id: m,
                 name: m.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || m,
@@ -251,7 +276,7 @@ router.get('/models', asyncHandler(async (req, res) => {
             return res.json(fallback);
         }
 
-        res.json(all);
+        res.json(filtered);
     } catch (err) {
         console.error('[AI Routes] /models error:', err);
         const fallback = (config.nvidia_models || []).map((m: string) => ({
