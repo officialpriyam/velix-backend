@@ -27,6 +27,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     try {
         const token = req.cookies?.token;
         if (!token) {
+            console.warn('[Auth] requireAuth: No token in cookies. Cookies:', JSON.stringify(req.cookies));
             return res.status(401).json({ error: 'Not authenticated' });
         }
 
@@ -38,9 +39,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         if (cachedAuth) {
             userId = cachedAuth.userId;
             email = cachedAuth.email;
+            console.log(`[Auth] requireAuth: Cache hit for user ${userId}`);
         } else {
             const payload = await AuthService.verifyToken(token);
             if (!payload) {
+                console.warn('[Auth] requireAuth: Token verification failed');
                 res.clearCookie('token', { path: '/' });
                 return res.status(401).json({ error: 'Invalid session' });
             }
@@ -48,6 +51,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
             email = payload.email;
             // Cache auth payload for next request
             await cacheService.setCachedAuth(token, { userId, email });
+            console.log(`[Auth] requireAuth: Verified user ${userId} via Supabase`);
         }
 
         // 2. Check Redis cache for user data
@@ -59,6 +63,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         } else {
             user = await dbService.getUserById(userId);
             if (!user) {
+                console.warn(`[Auth] requireAuth: User ${userId} not found in DB`);
                 return res.status(404).json({ error: 'User not found' });
             }
             // Cache user data for next request

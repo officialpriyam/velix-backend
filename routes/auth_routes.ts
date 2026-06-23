@@ -63,7 +63,8 @@ router.get('/site-status', asyncHandler(async (req, res) => {
         });
     }
 
-    res.json({ open: true, message: 'Site is available.' });
+    const oauthRedirectUrl = process.env.OAUTH_REDIRECT_URL || '';
+    res.json({ open: true, message: 'Site is available.', oauthRedirectUrl });
 }));
 
 router.get('/me', asyncHandler(requireAuth), asyncHandler(async (req, res) => {

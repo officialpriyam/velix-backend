@@ -34,13 +34,19 @@ router.post('/enhance-prompt', asyncHandler(async (req, res) => {
  * Generate code with AI (returns structured file data)
  */
 router.post('/generate', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+    console.log('[AI Routes] /generate called');
     const { prompt, model, language, sessionId: existingSessionId, enableWebSearch } = req.body;
 
     if (!prompt) {
         return res.status(400).json({ error: "Prompt is required" });
     }
 
-    const user = req.auth!.user;
+    if (!req.auth || !req.auth.user) {
+        console.error('[AI Routes] /generate - req.auth missing after requireAuth');
+        return res.status(401).json({ error: "Authentication failed" });
+    }
+
+    const user = req.auth.user;
 
     if (user.credits < 20) {
         return res.status(402).json({ error: "Insufficient credits. Code generation requires 20 credits. Buy more credits to continue." });
@@ -51,8 +57,13 @@ router.post('/generate', asyncHandler(requireAuth), asyncHandler(async (req, res
     const context = plugin?.systemPrompt || "";
     const skipDocs = platform === 'discord-bot';
 
+    let sessionId = existingSessionId || `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    let files: any[] = [];
+    let rawResponse = '';
+    let modelUsed = model || 'unknown';
+    let creditsRemaining = user.credits;
+
     try {
-        // Load conversation history for context
         let history: Array<{ role: string; content: string }> = [];
         if (existingSessionId) {
             try {
@@ -69,21 +80,46 @@ router.post('/generate', asyncHandler(requireAuth), asyncHandler(async (req, res
         }
 
         const result = await generateCode(prompt, model, context, skipDocs, enableWebSearch === true, history, platform);
+        files = result.files || [];
+        rawResponse = result.rawResponse || '';
+        modelUsed = result.model || model;
 
-        // REUSE or GENERATE session ID
-        const sessionId = existingSessionId || `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        console.log(`[AI Routes] /generate AI completed - ${files.length} files, model: ${modelUsed}`);
+    } catch (aiError: any) {
+        console.error('[AI Routes] AI generation failed:', aiError.message);
+        return res.status(500).json({ error: `AI generation failed: ${aiError.message || 'Unknown error'}` });
+    }
 
-        // SAVE FILES TO SANDBOX IMMEDIATELY
+    // Write files to sandbox (non-critical, don't fail over this)
+    try {
         const sandbox = new SandboxContext(sessionId);
-        for (const file of result.files) {
+        for (const file of files) {
             sandbox.writeFile(file.path, file.content);
         }
+    } catch (e: any) {
+        console.warn('[AI Routes] Sandbox write failed:', e.message);
+    }
 
-        // Deduct credits and save history
+    // Deduct credits (non-critical)
+    try {
         await dbService.deductCredits(req.auth!.userId, 20, 'generation', `Generated code for ${plugin?.name || "Project"}`);
-        const updatedUser = await dbService.getUserById(req.auth!.userId);
-        if (updatedUser) await cacheService.setCachedUser(req.auth!.userId, updatedUser);
+    } catch (deductErr: any) {
+        console.error('[AI Routes] deductCredits failed:', deductErr.message);
+    }
 
+    // Get updated user (non-critical)
+    try {
+        const updatedUser = await dbService.getUserById(req.auth!.userId);
+        if (updatedUser) {
+            await cacheService.setCachedUser(req.auth!.userId, updatedUser);
+            creditsRemaining = updatedUser.credits ?? 0;
+        }
+    } catch (e: any) {
+        console.warn('[AI Routes] Failed to fetch updated user:', e.message);
+    }
+
+    // Create project record (non-critical)
+    try {
         await dbService.createProject({
             id: sessionId,
             userId: req.auth!.userId,
@@ -91,39 +127,45 @@ router.post('/generate', asyncHandler(requireAuth), asyncHandler(async (req, res
             language: language || 'java',
             model: model
         });
+    } catch (e: any) {
+        console.warn('[AI Routes] Failed to create project record:', e.message);
+    }
 
-        // Persistence: Save chat history
+    // Save chat history (non-critical)
+    try {
         await dbService.addMessage(sessionId, 'user', prompt);
-        await dbService.addMessage(sessionId, 'assistant', result.rawResponse);
+        await dbService.addMessage(sessionId, 'assistant', rawResponse.slice(0, 4000));
+    } catch (e: any) {
+        console.warn('[AI Routes] Failed to save chat history:', e.message);
+    }
 
-        // Create version snapshot for this generation
+    // Create version snapshot (non-critical)
+    try {
         const fileMap: Record<string, string> = {};
         const fileList: string[] = [];
-        for (const file of result.files) {
+        for (const file of files) {
             fileMap[file.path] = file.content;
             fileList.push(file.path);
         }
         if (fileList.length > 0) {
             await dbService.createVersion(sessionId, 'ai', fileMap, fileList, prompt.slice(0, 120));
         }
-
-        res.json({
-            sessionId,
-            files: result.files,
-            model: result.model,
-            rawResponse: result.rawResponse,
-            creditsUsed: 20,
-            creditsRemaining: updatedUser.credits
-        });
-    } catch (error: any) {
-        console.error('[AI Routes] Generate error:', error.message);
-        console.error('[AI Routes] Generate error stack:', error.stack);
-        if (error.response) {
-            console.error('[AI Routes] Response status:', error.response.status);
-            console.error('[AI Routes] Response data:', JSON.stringify(error.response.data).substring(0, 500));
-        }
-        res.status(500).json({ error: error.message || 'Internal Server Error' });
+    } catch (e: any) {
+        console.warn('[AI Routes] Failed to create version:', e.message);
     }
+
+    // ALWAYS send response — truncate rawResponse to prevent huge payloads
+    const responsePayload = {
+        sessionId,
+        files,
+        model: modelUsed,
+        rawResponse: rawResponse.slice(0, 2000),
+        creditsUsed: 20,
+        creditsRemaining
+    };
+    console.log(`[AI Routes] /generate sending response - files: ${files.length}, payload size: ~${JSON.stringify(responsePayload).length} bytes`);
+    res.json(responsePayload);
+    console.log(`[AI Routes] /generate response sent OK`);
 }));
 
 /**
