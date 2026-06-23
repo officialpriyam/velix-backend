@@ -96,6 +96,12 @@ export const generateCode = async (
             const pluginName = language?.replace('config-', '') || 'custom';
             enhancedSystemPrompt = `You are an expert Minecraft server configuration specialist. Your ONLY job is to generate COMPLETE, PRODUCTION-READY configuration files for the ${pluginName} plugin and related server files.
 
+## OVERRIDE: THIS IS CONFIGURATION — NOT A PLUGIN
+You are generating CONFIGURATION FILES for an existing Minecraft server plugin.
+DO NOT generate: pom.xml, build.gradle.kts, plugin.yml, .java files, .kt files, or ANY plugin source code.
+DO NOT generate: src/main/java/, org.bukkit., JavaPlugin, or ANY Java/Kotlin code.
+ONLY generate: .yml, .yaml, .json, .toml, .properties, .xml configuration files.
+
 ## OUTPUT FORMAT (MANDATORY)
 For EACH file, output exactly:
 FILE: path/to/file.ext
@@ -138,6 +144,12 @@ ${cappedSkills}`;
             const datapackType = language?.replace('datapack-', '') || 'full';
             enhancedSystemPrompt = `You are an expert Minecraft datapack developer. Your ONLY job is to generate COMPLETE, WORKING datapacks for Minecraft 1.21.x.
 
+## OVERRIDE: THIS IS A DATAPACK — NOT A PLUGIN
+You are generating a MINECRAFT DATAPACK, NOT a Java/Kotlin plugin.
+DO NOT generate: pom.xml, build.gradle.kts, plugin.yml, .java files, .kt files, or ANY plugin code.
+DO NOT generate: src/main/java/, org.bukkit., JavaPlugin, or ANY Java/Kotlin code.
+ONLY generate: pack.mcmeta, .mcfunction files, .json files (advancements, loot tables, recipes, predicates, tags).
+
 ## OUTPUT FORMAT (MANDATORY)
 For EACH file, output exactly:
 FILE: path/to/file.ext
@@ -150,33 +162,57 @@ FILE: path/to/file.mcfunction
 [complete mcfunction content]
 \`\`\`
 
-## DATAPACK FORMAT (1.21.x)
-1. pack.mcmeta uses pack_format: 61 for 1.21.4, pack_format: 57 for 1.21.2-1.21.3
-2. Directory layout: data/<namespace>/function/, data/<namespace>/advancement/, etc.
-3. Use tick.json and load.json in data/<namespace>/tags/function/ for auto-execution
-4. .mcfunction files: one command per line, no / prefix, # comments allowed
-5. All commands must be valid 1.21.x syntax
+## DATAPACK STRUCTURE (1.21.x)
+my-datapack/
+├── pack.mcmeta
+└── data/
+    └── <namespace>/
+        ├── function/
+        │   ├── load.mcfunction      (runs on /reload)
+        │   └── tick.mcfunction      (runs every tick)
+        ├── advancement/
+        │   └── custom.json
+        ├── loot_table/
+        │   └── custom.json
+        ├── recipe/
+        │   └── custom.json
+        ├── predicate/
+        │   └── custom.json
+        ├── item_modifier/
+        │   └── custom.json
+        └── tags/
+            ├── block/
+            │   └── custom.json
+            ├── entity_type/
+            │   └── custom.json
+            └── function/
+                ├── load.json
+                └── tick.json
 
-## MINECRAFT 1.21.x COMMAND REFERENCE
-- execute as @a at @s run ...
-- scoreboard players add @s objective 1
+## PACK.MC META FORMAT
+\`\`\`json
+{
+  "pack": {
+    "pack_format": 61,
+    "description": "Description of the datapack"
+  }
+}
+\`\`\`
+Use pack_format: 61 for MC 1.21.4, 57 for 1.21.2-1.21.3, 48 for 1.21-1.21.1
+
+## MCFUNCTION RULES
+- One command per line
+- NO / prefix (just the command)
+- # comments are allowed
+- Use @a, @e, @p, @r, @s, @n selectors
+- execute as/at/in/if/unless/store/run subcommands
+- scoreboard objectives add/add/set/reset/operation
+- schedule function namespace:func 10t
+- data modify storage namespace:key ...
 - tellraw @a {"text":"msg","color":"green"}
 - title @a title {"text":"Title"}
 - give @p diamond 1
-- particle minecraft:flame ~ ~1 ~ 0.5 0.5 0.5 0.1 50
-- playsound minecraft:block.note_block.pling master @s ~ ~ ~ 1 1
-- schedule function namespace:func 10t
-- data modify storage namespace:key value set value ...
-- macro: \$parameter in function, function namespace:func {param:"value"}
-
-## COMMON DATAPACK STRUCTURES
-- Namespace: lowercase, no spaces (e.g., mypack)
-- tick.json: {"values":["namespace:tick_function"]}
-- load.json: {"values":["namespace:load_function"]}
-- Advancement: {"display":{...},"criteria":{...}}
-- Loot table: {"type":"minecraft:chest","pools":[...]}
-- Predicate: {"condition":"...",...}
-- Recipe: {"type":"minecraft:crafting_shaped","pattern":[...],"key":{...},"result":{...}}
+- macro: \$parameter in definition, function namespace:func {param:"value"}
 
 ## RESPONSE FORMAT
 - Output ONLY file blocks with FILE: header and code fences
@@ -191,6 +227,12 @@ ${cappedSkills}`;
         } else if (isScripting) {
             // SCRIPTING / COMMANDS MODE
             enhancedSystemPrompt = `You are an expert Minecraft command engineer. Your ONLY job is to generate COMPLETE, WORKING command scripts for Minecraft 1.21.x.
+
+## OVERRIDE: THIS IS COMMAND SCRIPTING — NOT A PLUGIN
+You are generating MINECRAFT COMMAND SCRIPTS, NOT a Java/Kotlin plugin.
+DO NOT generate: pom.xml, build.gradle.kts, plugin.yml, .java files, .kt files, or ANY plugin code.
+DO NOT generate: src/main/java/, org.bukkit., JavaPlugin, or ANY Java/Kotlin code.
+ONLY generate: .mcfunction files, .sh files (for RCON), .json files (for tags/function).
 
 ## OUTPUT FORMAT (MANDATORY)
 For EACH file, output exactly:
