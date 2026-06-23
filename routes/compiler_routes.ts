@@ -57,8 +57,9 @@ router.all('*', asyncHandler(async (req, res) => {
             responseType: cleanPath.startsWith('artifact') ? 'stream' : 'json'
         });
 
+        const skipHeaders = new Set(['transfer-encoding', 'content-length', 'content-encoding', 'connection']);
         Object.entries(response.headers).forEach(([key, value]) => {
-            if (value !== undefined) {
+            if (value !== undefined && !skipHeaders.has(key.toLowerCase())) {
                 res.setHeader(key, value);
             }
         });
