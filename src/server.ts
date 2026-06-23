@@ -61,7 +61,7 @@ try {
 
 // Basic Route
 app.get('/', (req, res) => {
-    res.send('Velix Backend is running (v1.0-Beta) (Now Supporting Hytale Plugin V0.1-Alpha');
+    res.send('Velix Backend is running (v1.9)  ');
 });
 
 app.get('/health', (req, res) => {

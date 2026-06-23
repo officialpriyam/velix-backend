@@ -442,6 +442,64 @@ router.patch('/projects/:id/visibility', asyncHandler(requireAuth), asyncHandler
     }
 }));
 
+// ─── Team Members ───
+router.get('/projects/:id/team', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+    try {
+        const members = await dbService.getTeamMembers(req.params.id);
+        res.json(members);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+}));
+
+router.post('/projects/:id/team', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+    const { userId, role } = req.body;
+    if (!userId || !role) return res.status(400).json({ error: 'userId and role required' });
+    if (!['editor', 'viewer'].includes(role)) return res.status(400).json({ error: 'role must be editor or viewer' });
+
+    try {
+        await dbService.addTeamMember(req.params.id, userId, role, req.auth!.userId);
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+}));
+
+router.delete('/projects/:id/team/:userId', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+    try {
+        await dbService.removeTeamMember(req.params.id, req.params.userId);
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+}));
+
+router.patch('/projects/:id/team/:userId', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+    const { role } = req.body;
+    if (!role || !['editor', 'viewer'].includes(role)) return res.status(400).json({ error: 'role must be editor or viewer' });
+
+    try {
+        await dbService.updateTeamMemberRole(req.params.id, req.params.userId, role);
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+}));
+
+router.get('/projects/:id/access', asyncHandler(async (req, res) => {
+    let userId: string | undefined;
+    try {
+        const token = req.cookies?.token;
+        if (token) {
+            const payload = await AuthService.verifyToken(token);
+            if (payload) userId = payload.userId;
+        }
+    } catch {}
+
+    const { accessible, role, project } = await dbService.isProjectAccessible(req.params.id, userId);
+    res.json({ accessible, role, isPublic: project?.is_public === 1 || project?.is_public === true });
+}));
+
 /**
  * Community Projects
  */

@@ -3,6 +3,7 @@ import { FileService } from '../services/FileService';
 import { AuthService } from '../services/AuthService';
 import { dbService } from '../services/DatabaseService';
 import { asyncHandler } from '../middleware/asyncHandler';
+import { requireAuth } from '../middleware/auth';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -10,7 +11,34 @@ import fs from 'fs';
 const router = Router();
 const upload = multer({ dest: 'uploads/' });
 
-router.post('/save', asyncHandler(async (req, res) => {
+// Access control middleware for project files
+const requireProjectAccess = asyncHandler(async (req, res, next) => {
+    const sessionId = req.params.sessionId || req.body.sessionId;
+    if (!sessionId) return next();
+
+    // Extract user from cookie if present
+    let userId: string | undefined;
+    try {
+        const token = req.cookies?.token;
+        if (token) {
+            const payload = await AuthService.verifyToken(token);
+            if (payload) userId = payload.userId;
+        }
+    } catch {}
+
+    const { accessible, role } = await dbService.isProjectAccessible(sessionId, userId);
+    if (!accessible) {
+        return res.status(403).json({ error: 'Access denied. This project is private.' });
+    }
+    // viewers can read but not write
+    if (role === 'viewer' && req.method !== 'GET') {
+        return res.status(403).json({ error: 'Viewers cannot modify this project.' });
+    }
+    (req as any).projectRole = role;
+    next();
+});
+
+router.post('/save', requireProjectAccess, asyncHandler(async (req, res) => {
     const { sessionId, files } = req.body;
     if (!sessionId || !files) {
         return res.status(400).json({ error: "sessionId and files are required" });
@@ -23,7 +51,7 @@ router.post('/save', asyncHandler(async (req, res) => {
     }
 }));
 
-router.get('/:sessionId', asyncHandler(async (req, res) => {
+router.get('/:sessionId', requireProjectAccess, asyncHandler(async (req, res) => {
     const { sessionId } = req.params;
     try {
         const files = await FileService.getFiles(sessionId);

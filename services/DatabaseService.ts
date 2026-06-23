@@ -190,6 +190,53 @@ class DatabaseService {
         return this.update('projects', { id }, { last_updated: new Date().toISOString() });
     }
 
+    // ─── Team Members ───
+    public async addTeamMember(projectId: string, userId: string, role: 'owner' | 'editor' | 'viewer', invitedBy?: string) {
+        return this.insert('team_members', {
+            project_id: projectId,
+            user_id: userId,
+            role,
+            invited_by: invitedBy || null
+        });
+    }
+
+    public async removeTeamMember(projectId: string, userId: string) {
+        return this.remove('team_members', { project_id: projectId, user_id: userId });
+    }
+
+    public async updateTeamMemberRole(projectId: string, userId: string, role: 'owner' | 'editor' | 'viewer') {
+        return this.update('team_members', { project_id: projectId, user_id: userId }, { role });
+    }
+
+    public async getTeamMembers(projectId: string) {
+        return this.request<any[]>('team_members', { method: 'GET', filters: { project_id: projectId } });
+    }
+
+    public async getUserTeamRole(projectId: string, userId: string) {
+        return this.selectOne('team_members', { project_id: projectId, user_id: userId });
+    }
+
+    public async isProjectAccessible(projectId: string, userId?: string): Promise<{ accessible: boolean; role: string | null; project: any }> {
+        const project = await this.getProjectById(projectId);
+        if (!project) return { accessible: false, role: null, project: null };
+
+        // Public projects are accessible to everyone
+        if (project.is_public === 1 || project.is_public === true) {
+            const role = userId ? (userId === project.user_id ? 'owner' : (await this.getUserTeamRole(projectId, userId))?.role || null) : 'viewer';
+            return { accessible: true, role, project };
+        }
+
+        // Private projects: only owner or team members
+        if (!userId) return { accessible: false, role: null, project };
+
+        if (userId === project.user_id) return { accessible: true, role: 'owner', project };
+
+        const membership = await this.getUserTeamRole(projectId, userId);
+        if (membership) return { accessible: true, role: membership.role, project };
+
+        return { accessible: false, role: null, project };
+    }
+
     public async getPublicProjects() {
         const projects = await this.request<any[]>('projects', {
             method: 'GET',
