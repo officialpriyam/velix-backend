@@ -3,6 +3,7 @@ import { AuthService } from '../services/AuthService';
 import { dbService } from '../services/DatabaseService';
 import { requireAuth, sessionCookieOptions } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
+import { cacheService } from '../services/CacheService';
 
 const router = Router();
 
@@ -26,6 +27,11 @@ router.post('/login', asyncHandler(async (req, res) => {
         const { user, token } = await AuthService.login(email, password);
 
         res.cookie('token', token, sessionCookieOptions);
+
+        // Cache user data for immediate use
+        if (user) {
+            await cacheService.setCachedUser(user.id, user);
+        }
 
         res.json({ user });
     } catch (error: any) {
@@ -64,7 +70,11 @@ router.get('/me', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
     res.json({ user: req.auth!.user });
 }));
 
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+    const token = req.cookies?.token;
+    if (token) {
+        await cacheService.invalidateAuth(token);
+    }
     res.clearCookie('token', { path: '/' });
     res.json({ success: true });
 });
@@ -77,19 +87,33 @@ router.post('/oauth', asyncHandler(async (req, res) => {
     }
 
     try {
-        const payload = await AuthService.verifyToken(access_token);
-        if (!payload) {
-            return res.status(401).json({ error: 'Invalid or expired token' });
-        }
+        // Check if we already have this OAuth session cached
+        const cachedSession = await cacheService.getCachedOAuthSession(access_token);
+        let user: any;
 
-        let user = await dbService.getUserById(payload.userId);
-        if (!user) {
-            await dbService.createUser({
-                id: payload.userId,
-                email: payload.email,
-                name: payload.email?.split('@')[0] || 'User'
-            });
+        if (cachedSession) {
+            user = cachedSession;
+        } else {
+            const payload = await AuthService.verifyToken(access_token);
+            if (!payload) {
+                return res.status(401).json({ error: 'Invalid or expired token' });
+            }
+
             user = await dbService.getUserById(payload.userId);
+            if (!user) {
+                await dbService.createUser({
+                    id: payload.userId,
+                    email: payload.email,
+                    name: payload.email?.split('@')[0] || 'User'
+                });
+                user = await dbService.getUserById(payload.userId);
+            }
+
+            // Cache both the OAuth session and user data
+            if (user) {
+                await cacheService.setCachedOAuthSession(access_token, user);
+                await cacheService.setCachedUser(user.id, user);
+            }
         }
 
         res.cookie('token', access_token, sessionCookieOptions);
@@ -110,6 +134,7 @@ router.patch('/profile', asyncHandler(requireAuth), asyncHandler(async (req, res
         await dbService.updateUserProfile(req.auth!.userId, displayName, email, discordId || "");
         await AuthService.updateAuthEmail(req.auth!.userId, email);
         const user = await dbService.getUserById(req.auth!.userId);
+        if (user) await cacheService.setCachedUser(req.auth!.userId, user);
         res.json({ success: true, user });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -135,6 +160,7 @@ router.patch('/preferences', asyncHandler(requireAuth), asyncHandler(async (req,
             knowledge_refractor: knowledge_refractor ? 1 : 0
         });
         const user = await dbService.getUserById(req.auth!.userId);
+        if (user) await cacheService.setCachedUser(req.auth!.userId, user);
         res.json({ success: true, user });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -171,6 +197,7 @@ router.post('/buy-credits', asyncHandler(requireAuth), asyncHandler(async (req, 
 
         await dbService.addCredits(req.auth!.userId, amount, 'purchase', `Bought ${packName || 'Credits Pack'}`);
         const user = await dbService.getUserById(req.auth!.userId);
+        if (user) await cacheService.setCachedUser(req.auth!.userId, user);
         res.json({ success: true, user });
     } catch (error: any) {
         res.status(500).json({ error: error.message });

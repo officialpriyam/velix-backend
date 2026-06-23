@@ -11,6 +11,7 @@ import { SandboxContext } from '../services/SandboxService';
 import { WebSearchService } from '../services/WebSearchService';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
+import { cacheService } from '../services/CacheService';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.post('/enhance-prompt', asyncHandler(async (req, res) => {
 /**
  * Generate code with AI (returns structured file data)
  */
-router.post('/generate', requireAuth, asyncHandler(async (req, res) => {
+router.post('/generate', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
     const { prompt, model, language, sessionId: existingSessionId, enableWebSearch } = req.body;
 
     if (!prompt) {
@@ -81,6 +82,7 @@ router.post('/generate', requireAuth, asyncHandler(async (req, res) => {
         // Deduct credits and save history
         await dbService.deductCredits(req.auth!.userId, 20, 'generation', `Generated code for ${plugin?.name || "Project"}`);
         const updatedUser = await dbService.getUserById(req.auth!.userId);
+        if (updatedUser) await cacheService.setCachedUser(req.auth!.userId, updatedUser);
 
         await dbService.createProject({
             id: sessionId,
@@ -169,6 +171,7 @@ router.post('/generate-and-compile', asyncHandler(requireAuth), asyncHandler(asy
         const plugin = pluginManager.getPlugin(language);
         await dbService.deductCredits(req.auth!.userId, 20, 'generation', `Generated & compiled ${plugin?.name || "Project"}`);
         const updatedUser = await dbService.getUserById(req.auth!.userId);
+        if (updatedUser) await cacheService.setCachedUser(req.auth!.userId, updatedUser);
 
         await dbService.createProject({
             id: result.sessionId,

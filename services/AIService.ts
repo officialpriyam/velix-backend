@@ -85,43 +85,68 @@ export const generateCode = async (
         const isKotlin = prompt.toLowerCase().includes('kotlin') || prompt.toLowerCase().includes('.kt');
         const buildFile = isKotlin ? 'build.gradle.kts' : 'pom.xml';
 
-        const enhancedSystemPrompt = `${context || "You are an expert full-stack architect and Minecraft systems engineer."}
+        const enhancedSystemPrompt = `You are an elite software engineer. Your ONLY job is to generate COMPLETE, PRODUCTION-READY code that compiles and runs on the FIRST attempt. You are generating code for the Velix AI platform.
 
-DOCS (VelixDocs):
-The following documentation highlights relevant patterns and signatures for the requested platform.
-Use this for syntax and best practices IF it applies to the technologies requested.
-IMPORTANT: For Minecraft plugins, refer to \`minecraft/core.md\` for the latest stable API versions and required repositories.
+## OUTPUT FORMAT (MANDATORY — follow EXACTLY)
+You MUST output EXACTLY this format. No other format is accepted:
+For EACH file, output:
+FILE: path/to/file.java
+\`\`\`java
+[complete file content]
+\`\`\`
 
+FILE: path/to/plugin.yml
+\`\`\`yaml
+[complete file content]
+\`\`\`
+
+FILE: ${buildFile}
+\`\`\`xml
+[complete file content — or gradle syntax if kotlin]
+\`\`\`
+
+## RULES (Violation = REJECTED response)
+
+### Build System (NON-NEGOTIABLE)
+- JAVA projects: Use pom.xml. NEVER build.gradle for Java.
+- KOTLIN projects: Use build.gradle.kts. NEVER pom.xml for Kotlin.
+- JAVA pom.xml MUST include: groupId matching package root, artifactId, version, Java 21 compiler settings, paper-api as compileOnly dependency.
+- KOTLIN build.gradle.kts MUST include: org.jetbrains.kotlin.jvm plugin, paper-api as compileOnly, kotlin("jvm") version "1.21.0".
+- NEVER use org.bukkit:bukkit-api. ALWAYS use paper-api, spigot-api, or folia-api.
+
+### Code Quality (ZERO TOLERANCE)
+- ALL imports MUST be present. Every class used must be imported.
+- ALL method overrides must have complete implementations. NO empty bodies.
+- NO placeholders like "// Add logic here" or "// TODO".
+- NO references to APIs that do not exist in the platform.
+- Use proper package declarations matching the file path.
+- Plugin main class MUST extend JavaPlugin (Minecraft) or equivalent.
+- plugin.yml MUST specify main class, name, version, api-version.
+
+### Package Naming
+- Derive package name from plugin name. NOT com.example.
+- Example: TPAPlugin -> com.tpa | OneChunkPlugin -> com.onechunk | AutoFish -> com.autofish
+- groupId in pom.xml must match the package root.
+
+### File Structure
+For Minecraft plugins, ALWAYS include:
+1. MainClass.java (or .kt)
+2. plugin.yml (or paper-plugin.yml for newer Paper)
+3. ${buildFile}
+4. Any additional classes referenced by the main class
+5. config.yml if the plugin uses configuration
+
+### Response Format
+- Output ONLY file blocks. NO explanations, NO markdown commentary, NO prose.
+- Each file block starts with FILE: path/to/file followed by a code block.
+- Code inside blocks must be COMPLETE — every line, every import, every method.
+
+## DOCUMENTATION REFERENCE
 ${cappedDocs}
 
-${cappedSkills}
+## SKILLS REFERENCE
+${cappedSkills}`;
 
-CRITICAL INSTRUCTIONS:
-    1. Minimalist Principle: Do NOT add external dependencies, plugins, or third-party APIs (like CMI, Vault, LuckPerms, etc.) unless specifically requested by the user or absolutely essential for the specific functionality asked. Prefer standard libraries and the core platform API.
-    2. Surgical Fixes: If a [PRIORITY CONTEXT] or existing file content is provided, do NOT remake the entire file structure or project. Provide surgical edits or the complete updated content of the existing files to fix the specific issues mentioned. Maintain the user's existing logic as much as possible.
-    3. Generate COMPLETE, COMPILABLE code with ALL necessary files if creating a new project.
-    4. Reality Check: Never generate "fake" or placeholder documentation, commands, or APIs that do not exist in the referenced documentation. If you are unsure about a specific API version or method, use the most stable one from VelixDocs.
-    5. No Placeholders: Do not use placeholders like // Add logic here unless it is a minor part of a larger template.
-    6. BUILD SYSTEM (CRITICAL — follow exactly based on language):
-       - JAVA plugin: use ${buildFile}. NEVER generate pom.xml for Kotlin projects.
-       - KOTLIN plugin: use build.gradle.kts ONLY. NEVER generate pom.xml.
-       - KOTLIN projects MUST use: org.jetbrains.kotlin.jvm plugin, paper-api as compileOnly, kotlin("jvm") version "1.21.0", kotlin("paperweight") for remapping.
-       - JAVA projects use pom.xml with paper-api dependency.
-       - Do NOT mix build systems. If Kotlin, ONLY build.gradle.kts. If Java, ONLY pom.xml.
-    7. Use proper package structures and imports.
-    8. Format your response with clear file markers:
-       FILE: path/to/file.ext
-       \`\`\`language
-       [code]
-       \`\`\`
-    9. JAVA VERSION: ALWAYS use Java 21 for all Minecraft plugins and Java-based projects.
-    10. BANNED DEPENDENCY: NEVER use \`org.bukkit:bukkit-api\`. ALWAYS use \`paper-api\`, \`spigot-api\`, or \`folia-api\`.
-    11. ZERO-ERROR POLICY: Perform a "virtual compilation" check. Ensure all imports are present and types match.
-    12. HIGHLIGHTED CONTEXT: If a [PRIORITY CONTEXT] section is provided, it is the ABSOLUTE TRUTH. Logic must integrate with it.
-    13. PACKAGE NAMING: Derive the Java package name from the plugin/project name, NOT generic \`com.example\`. For example, a plugin called "OneChunkPlugin" should use package \`com.onechunk\`, a plugin called "TPAPlugin" should use \`com.tpa\`, etc. The groupId in pom.xml must match the package root. Use lowercase, short, meaningful names.
-    14. CODE QUALITY: Follow SOLID principles. Use proper error handling (try-catch), logging (SLF4J), and event-driven architecture. Never leave empty method bodies. Implement complete logic.
-    15. FILE STRUCTURE: For Minecraft plugins, always include: MainClass.java/kt, plugin.yml (or paper-plugin.yml), config.yml if needed, build file, and any resource files.
-`;
 
         const messages: any[] = [
             { role: "system", content: enhancedSystemPrompt }
@@ -178,28 +203,25 @@ CRITICAL INSTRUCTIONS:
                     messages: messages,
                     tools: [searchTool],
                     tool_choice: "auto",
-                        temperature: 0.7,
-                        max_tokens: 8192
-                    }, {
-                        headers: {
-                            "Authorization": `Bearer ${apiKey}`,
-                            "Content-Type": "application/json",
-                            "HTTP-Referer": "https://kodari-clone.local",
-                            "X-Title": "Velix"
-                        },
-                        timeout: 120000
-                    });
+                    temperature: 0.4,
+                    max_tokens: 8192
+                }, {
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://kodari-clone.local",
+                        "X-Title": "Velix"
+                    },
+                    timeout: 120000
+                });
 
-                    const choice = response.data.choices[0];
-                    const message = choice?.message;
+                const choice = response.data.choices[0];
+                const message = choice?.message;
 
                 if (message && message.tool_calls && message.tool_calls.length > 0) {
                     console.log(`[AIService] AI requested web search tool calls:`, JSON.stringify(message.tool_calls));
-                    
-                    // Add the assistant's message with tool calls to message history
                     messages.push(message);
 
-                    // Execute each tool call
                     for (const toolCall of message.tool_calls) {
                         if (toolCall.function.name === 'search_web') {
                             let query = '';
@@ -212,10 +234,10 @@ CRITICAL INSTRUCTIONS:
 
                             if (query) {
                                 const searchResults = await WebSearchService.searchWeb(query);
-                                const searchContext = searchResults.length > 0 
+                                const searchContext = searchResults.length > 0
                                     ? `Search Results for "${query}":\n` + searchResults.map(r => `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.snippet}\n---`).join('\n')
                                     : `No search results found for "${query}".`;
-                                
+
                                 messages.push({
                                     role: "tool",
                                     tool_call_id: toolCall.id,
@@ -226,12 +248,11 @@ CRITICAL INSTRUCTIONS:
                         }
                     }
 
-                    // Final call with tool execution context
                     console.log(`[AIService] Resending prompt with search results to AI...`);
                     response = await axios.post(endpoint, {
                         model: modelName,
                         messages: messages,
-                        temperature: 0.7,
+                        temperature: 0.4,
                         max_tokens: 8192
                     }, {
                         headers: {
@@ -245,33 +266,30 @@ CRITICAL INSTRUCTIONS:
                 }
             } catch (toolError: any) {
                 console.warn(`[AIService] Tool-use failed or not supported by model:`, toolError.message);
-                
-                // Fallback to pre-search heuristic
+
                 const keywords = prompt.toLowerCase()
                     .replace(/[^\w\s]/g, '')
                     .split(/\s+/)
                     .filter(k => k.length > 3 && !['create', 'plugin', 'make', 'implement', 'write', 'using', 'build', 'minecraft', 'discord', 'server'].includes(k));
-                
+
                 if (keywords.length > 0) {
                     const searchQuery = keywords.slice(0, 4).join(' ');
                     console.log(`[AIService] Fallback pre-search executing for query: "${searchQuery}"`);
                     const searchResults = await WebSearchService.searchWeb(searchQuery);
-                    
+
                     if (searchResults.length > 0) {
                         const searchContext = `\n=== ADDITIONAL SEARCH CONTEXT ===\n${searchResults.map(r => `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.snippet}\n---`).join('\n')}\n`;
                         messages[0].content = messages[0].content + searchContext;
                     }
                 }
 
-                // Standard call
-                // Log total request size for debugging
                 const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
                 console.log(`[AIService] Sending to ${modelName}: ${messages.length} messages, ~${totalChars} chars (~${Math.ceil(totalChars/4)} tokens)`);
 
                 response = await axios.post(endpoint, {
                     model: modelName,
                     messages: messages,
-                    temperature: 0.7,
+                    temperature: 0.4,
                     max_tokens: 8192
                 }, {
                     headers: {
@@ -288,7 +306,7 @@ CRITICAL INSTRUCTIONS:
             response = await axios.post(endpoint, {
                 model: modelName,
                 messages: messages,
-                temperature: 0.7,
+                temperature: 0.4,
                 max_tokens: 8192
             }, {
                 headers: {
@@ -381,31 +399,37 @@ export const enhancePrompt = async (prompt: string, platform?: string): Promise<
     const platformLabel = platform === 'minecraft' ? 'Minecraft plugin/mod' : platform === 'hytale' ? 'Hytale plugin' : platform === 'discord' ? 'Discord bot' : 'software project';
 
     const model = "openai/gpt-oss-20b:free";
-    const systemPrompt = `You are a specialized Prompt Engineer for ${platformLabel} development.
+    const systemPrompt = `You are an expert ${platformLabel} architect. Your job is to take a brief user request and transform it into a DETAILED, COMPLETE technical specification that an AI code generator can use to produce COMPILABLE, PRODUCTION-READY code on the FIRST attempt.
 
-Your task is to take a brief user request and enhance it into a highly detailed, professional specification that an AI code generator can use to produce excellent, compilable code.
+## OUTPUT FORMAT
+Return ONLY the enhanced specification. NO commentary, NO explanations.
 
-RULES:
-- Expand on features, architecture, file structure, and constraints
-- Be specific about packages, class names, methods, and file paths
-- Derive a meaningful package name from the project name (NOT generic com.example)
-- Include all necessary config files (pom.xml, build.gradle.kts, plugin.yml, etc.)
-- Faithfully preserve the user's original intent
-- Keep it concise but information-dense
-- Only return the enhanced prompt text, nothing else
-- IMPORTANT: For Minecraft plugins, specify the build system:
-  - Java plugins: pom.xml with paper-api
-  - Kotlin plugins: build.gradle.kts with org.jetbrains.kotlin.jvm
+## SPEC STRUCTIFICATION (include ALL of these):
+1. **Project Name**: A clear, descriptive name
+2. **Package Name**: Derived from project name (NOT com.example). E.g., TPAPlugin -> com.tpa
+3. **Features List**: Every feature the plugin must have, with brief descriptions
+4. **File Structure**: List EVERY file that needs to be created with its full path:
+   - src/main/java/com/xxx/MainPlugin.java
+   - src/main/resources/plugin.yml
+   - pom.xml (for Java) or build.gradle.kts (for Kotlin)
+   - Any additional classes, configs, etc.
+5. **Build System**: Specify exactly:
+   - Java: pom.xml with paper-api dependency, Java 21, proper groupId matching package
+   - Kotlin: build.gradle.kts with kotlin-jvm plugin, paper-api
+6. **Main Class Structure**: Describe the class hierarchy, what extends what, what methods to implement
+7. **Event Handlers**: List all events to listen for and what each should do
+8. **Commands**: List all commands with usage, descriptions, and permissions
+9. **Configuration**: If the plugin needs config.yml, list all config options with types and defaults
+10. **plugin.yml**: List all commands, permissions, and the main class reference
 
-${platformContext ? `AVAILABLE DOCUMENTATION AND SKILLS:\n${platformContext.slice(0, 3000)}\n\nUse the above docs and skills as reference when enhancing the prompt. Incorporate relevant API patterns, class names, and best practices.` : ''}
+## RULES
+- Be SPECIFIC about class names, method names, file paths
+- Include actual API method names from the documentation if available
+- Ensure the file structure is COMPLETE — every file needed to compile and run
+- For Minecraft plugins: ALWAYS include plugin.yml with api-version, main class, commands
+- Keep it concise but comprehensive — this spec will be fed to a code generator
 
-OUTPUT FORMAT for the enhanced prompt should clearly list:
-1. Project name and package
-2. Features list
-3. File structure (list every file that needs to be created)
-4. Build system configuration
-5. Main class structure
-6. Any config.yml or plugin.yml requirements`;
+${platformContext ? `\\n\\nAVAILABLE DOCUMENTATION AND SKILLS:\\n${platformContext.slice(0, 3000)}\\n\\nUse the above docs and skills as reference when enhancing the prompt. Incorporate relevant API patterns, class names, and best practices.` : ''}`;
 
     const ENHANCE_MODELS = ['openai/gpt-oss-20b:free', 'meta-llama/llama-3.3-70b-instruct:free', 'openai/gpt-oss-120b:free'];
     
@@ -424,8 +448,8 @@ OUTPUT FORMAT for the enhanced prompt should clearly list:
                     { role: "system", content: systemPrompt },
                     { role: "user", content: prompt }
                 ],
-                temperature: 0.7,
-                max_tokens: 2000
+                temperature: 0.4,
+                max_tokens: 3000
             }, {
                 headers: {
                     "Authorization": `Bearer ${apiKey}`,
@@ -433,7 +457,7 @@ OUTPUT FORMAT for the enhanced prompt should clearly list:
                     "HTTP-Referer": "https://kodari.app",
                     "X-Title": "Velix AI"
                 },
-                timeout: 30000
+                timeout: 45000
             });
 
             const enhanced = response.data.choices[0]?.message?.content?.trim();
@@ -460,14 +484,22 @@ OUTPUT FORMAT for the enhanced prompt should clearly list:
 export const parseAICodeResponse = (response: string): GeneratedFile[] => {
     const files: GeneratedFile[] = [];
 
+    // Sanitize: remove markdown prose blocks that aren't code
+    // Remove lines that are just explanations between file blocks
+    const cleanResponse = response
+        .replace(/```[\w]*\n\s*(?:This\s+(?:file|class|code|implementation)|Here\s+(?:is|are)|The\s+(?:above|following)|Note:|Important:|Summary:)[\s\S]*?```/gi, '')
+        .trim();
+
     // Pattern 1: FILE: path/to/file.ext followed by code block
     const filePattern = /FILE:\s*([^\n]+)\n```[\w]*\n([\s\S]*?)```/gi;
     let match;
 
-    while ((match = filePattern.exec(response)) !== null) {
-        const path = match[1].trim();
+    while ((match = filePattern.exec(cleanResponse)) !== null) {
+        const path = match[1].trim().replace(/^["']|["']$/g, '');
         const content = match[2].trim();
-        files.push({ path, content });
+        if (content.length > 5 && !files.some(f => f.path === path)) {
+            files.push({ path, content });
+        }
     }
 
     // Pattern 2: **path/to/file.ext** followed by code block (alternative format)

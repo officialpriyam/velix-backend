@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { AuthService } from '../services/AuthService';
 import { dbService } from '../services/DatabaseService';
+import { cacheService } from '../services/CacheService';
 
 declare global {
     namespace Express {
@@ -29,18 +30,42 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
             return res.status(401).json({ error: 'Not authenticated' });
         }
 
-        const payload = await AuthService.verifyToken(token);
-        if (!payload) {
-            res.clearCookie('token', { path: '/' });
-            return res.status(401).json({ error: 'Invalid session' });
+        // 1. Check Redis cache for auth payload
+        const cachedAuth = await cacheService.getCachedAuth(token);
+        let userId: string;
+        let email: string;
+
+        if (cachedAuth) {
+            userId = cachedAuth.userId;
+            email = cachedAuth.email;
+        } else {
+            const payload = await AuthService.verifyToken(token);
+            if (!payload) {
+                res.clearCookie('token', { path: '/' });
+                return res.status(401).json({ error: 'Invalid session' });
+            }
+            userId = payload.userId;
+            email = payload.email;
+            // Cache auth payload for next request
+            await cacheService.setCachedAuth(token, { userId, email });
         }
 
-        const user = await dbService.getUserById(payload.userId);
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
+        // 2. Check Redis cache for user data
+        const cachedUser = await cacheService.getCachedUser(userId);
+        let user: any;
+
+        if (cachedUser) {
+            user = cachedUser;
+        } else {
+            user = await dbService.getUserById(userId);
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            // Cache user data for next request
+            await cacheService.setCachedUser(userId, user);
         }
 
-        req.auth = { ...payload, user };
+        req.auth = { userId, email, user };
         next();
     } catch (err: any) {
         console.error('[Auth] requireAuth error:', err);
@@ -53,10 +78,28 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
         const token = req.cookies?.token;
         if (!token) return next();
 
-        const payload = await AuthService.verifyToken(token);
-        if (payload) {
-            const user = await dbService.getUserById(payload.userId);
-            req.auth = { ...payload, user };
+        const cachedAuth = await cacheService.getCachedAuth(token);
+        if (cachedAuth) {
+            const cachedUser = await cacheService.getCachedUser(cachedAuth.userId);
+            if (cachedUser) {
+                req.auth = { ...cachedAuth, user: cachedUser };
+            } else {
+                const user = await dbService.getUserById(cachedAuth.userId);
+                if (user) {
+                    await cacheService.setCachedUser(cachedAuth.userId, user);
+                    req.auth = { ...cachedAuth, user };
+                }
+            }
+        } else {
+            const payload = await AuthService.verifyToken(token);
+            if (payload) {
+                await cacheService.setCachedAuth(token, payload);
+                const user = await dbService.getUserById(payload.userId);
+                if (user) {
+                    await cacheService.setCachedUser(payload.userId, user);
+                    req.auth = { ...payload, user };
+                }
+            }
         }
     } catch (err: any) {
         console.warn('[Auth] optionalAuth error (continuing):', err?.message);

@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { generateCode } from '../services/AIService';
 import { SandboxContext } from '../services/SandboxService';
+import { cacheService } from '../services/CacheService';
 import fs from 'fs';
 
 const router = Router();
@@ -85,6 +86,17 @@ router.post('/projects/:projectId/generate', asyncHandler(requireAuth), asyncHan
     }
 
     try {
+        // Ensure project exists in the projects table (required by FK constraint on wiki_pages)
+        const existingProject = await dbService.getProjectById(projectId);
+        if (!existingProject) {
+            await dbService.createProject({
+                id: projectId,
+                userId: req.auth!.userId,
+                name: 'Project',
+                language: 'java'
+            });
+        }
+
         const sandbox = new SandboxContext(projectId);
         let projectContext = '';
         if (fs.existsSync(sandbox.rootPath)) {
@@ -156,6 +168,7 @@ RULES:
         await dbService.deductCredits(req.auth!.userId, 5, 'wiki_generation', `Generated wiki: ${pageTitle}`);
 
         const updatedUser = await dbService.getUserById(req.auth!.userId);
+        if (updatedUser) await cacheService.setCachedUser(req.auth!.userId, updatedUser);
 
         res.json({
             page,
