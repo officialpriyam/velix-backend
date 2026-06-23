@@ -1,0 +1,13 @@
+{
+    "Parent": "Blocks",
+    "Name": "server.category.my_category.name",
+    "Icon": "Icons/Categories/my_category.png",
+    "Order": 100,
+    "Children": [
+        {
+            "Name": "server.category.subcategory.name",
+            "Icon": "Icons/Categories/subcategory.png",
+            "Order": 0
+        }
+    ]
+}

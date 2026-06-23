@@ -1,0 +1,74 @@
+{
+    "id": "discord-bot",
+    "name": "Discord Bot",
+    "description": "Create powerful Discord bots with Python, JavaScript, TypeScript, or Ruby",
+    "systemPrompt": "You are a world-class Discord Bot developer specializing in discord.js (JavaScript/TypeScript) and discord.py (Python). \n\nINTEL:\n- JavaScript/TypeScript: Use discord.js v14+. Always set up GatewayIntentBits (Guilds, Messages, MessageContent). Use modern async/await.\n- Python: Use discord.py 2.0+. Use commands.Bot. Always define intents.message_content = True.\n- DEPS: For Node, provide a valid package.json. For Python, provide requirements.txt.\n- RUN: Your code will be executed in a secure sandbox. Ensure the main entry point is index.js/ts or bot.py.\n- TOKEN: Use 'YOUR_TOKEN_HERE' as a placeholder.\n- CONSTRAINTS: Only use external plugin APIs or imports (e.g., from other plugins or large third-party libraries not required by the core functionality) when explicitly requested or absolutely necessary for the core task.\n",
+    "version": "1.0.0",
+    "author": "Velix",
+    "platforms": [
+        "discord"
+    ],
+    "compilerCommands": {
+        "install": "npm install || pip install -r requirements.txt",
+        "compile": "echo 'No compilation needed for script'",
+        "run": "node index.js || python bot.py"
+    },
+    "languages": [
+        {
+            "id": "python",
+            "name": "Python",
+            "version": "3.10",
+            "run_command": "python bot.py",
+            "file_extension": "py",
+            "compilerCommands": {
+                "install": "pip install -r requirements.txt",
+                "compile": "echo 'Building...'",
+                "run": "python bot.py"
+            }
+        },
+        {
+            "id": "javascript",
+            "name": "JavaScript",
+            "version": "Node.js 18",
+            "run_command": "node index.js",
+            "file_extension": "js",
+            "compilerCommands": {
+                "install": "npm install",
+                "compile": "echo 'Building...'",
+                "run": "node index.js"
+            }
+        },
+        {
+            "id": "typescript",
+            "name": "TypeScript",
+            "version": "Node.js 18",
+            "run_command": "ts-node index.ts",
+            "file_extension": "ts",
+            "compilerCommands": {
+                "install": "npm install",
+                "compile": "echo 'Building...'",
+                "run": "npx ts-node index.ts"
+            }
+        },
+        {
+            "id": "ruby",
+            "name": "Ruby",
+            "version": "3.0",
+            "run_command": "ruby bot.rb",
+            "file_extension": "rb",
+            "compilerCommands": {
+                "install": "bundle install",
+                "compile": "echo 'Building...'",
+                "run": "ruby bot.rb"
+            }
+        }
+    ],
+    "templates": {
+        "python": {
+            "main": "import discord\nfrom discord.ext import commands\n\nintents = discord.Intents.default()\nintents.message_content = True\n\nbot = commands.Bot(command_prefix='!', intents=intents)\n\n@bot.event\nasync def on_ready():\n    print(f'Logged in as {bot.user}')\n\n@bot.command()\nasync def ping(ctx):\n    await ctx.send('Pong!')\n\nbot.run('YOUR_TOKEN_HERE')"
+        },
+        "javascript": {
+            "main": "const { Client, GatewayIntentBits } = require('discord.js');\nconst client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });\n\nclient.on('ready', () => {\n  console.log(`Logged in as ${client.user.tag}!`);\n});\n\nclient.on('messageCreate', msg => {\n  if (msg.content === '!ping') {\n    msg.reply('Pong!');\n  }\n});\n\nclient.login('YOUR_TOKEN_HERE');"
+        }
+    }
+}

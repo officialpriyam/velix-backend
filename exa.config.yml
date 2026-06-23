@@ -1,0 +1,38 @@
+# Velix Backend Configuration
+
+# OpenRouter API Key (Replace with actual key)
+openrouter_api_key: ""
+
+# AI Models available using OpenRouter
+ai_models:
+  - "google/gemini-2.0-flash-exp:free"
+  - "openai/gpt-4o"
+  - "anthropic/claude-3.5-sonnet"
+  - "mistralai/mistral-large"
+
+# Compiler Limits
+compiler:
+  max_memory_mb: 512
+  timeout_seconds: 30
+
+# Sandbox Configuration
+sandbox:
+  root_dir: "./sandbox_env"
+
+# NVIDIA NIM API Key (optional, for NVIDIA AI models)
+nvidia_api_key: ""
+
+# NVIDIA models available
+nvidia_models:
+  - "nvidia/llama-3.1-nemotron-70b-instruct"
+  - "meta/llama-3.3-70b-instruct"
+
+# Sandbox Service (Go microservice) connection
+# URL of the sandbox compiler service (can be on another machine)
+sandbox_service_url: "http://localhost:3002"
+
+# API key to authenticate with the sandbox service
+# Must match the SANDBOX_API_KEY env var on the sandbox service
+# Leave empty if running locally without auth
+sandbox_api_key: ""
+

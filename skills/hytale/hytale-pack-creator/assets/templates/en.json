@@ -1,0 +1,5 @@
+{
+    "server.example_block.name": "Example Block",
+    "server.category.my_category.name": "My Category",
+    "server.example_block.interaction.toggle": "Toggle"
+}

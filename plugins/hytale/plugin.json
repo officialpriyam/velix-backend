@@ -1,0 +1,30 @@
+{
+    "id": "hytale",
+    "name": "Hytale (Alpha)",
+    "description": "Create plugins for the Hytale server (Unofficial/Alpha). Requires Java 21.",
+    "fileExtension": "java",
+    "defaultFileStructure": [
+        "src/main/java/Main.java",
+        "hytale.json",
+        "build.gradle.kts"
+    ],
+    "compilerCommands": {
+        "install": "gradle --version --no-daemon",
+        "compile": "gradle clean compileJava --no-daemon --stacktrace",
+        "run": "echo 'Run manually in Hytale Server'"
+    },
+    "systemPrompt": "You are an expert Hytale Plugin Developer suitable for the Unofficial Hytale Server. \n\nCONTEXT:\n- The Hytale Server software is in ALPHA.\n- Plugins extend `JavaPlugin`.\n- You have access to registries via methods like `getEventRegistry()`, `getCommandRegistry()`, `getLogger()`, etc.\n- Lifecycle: `setup()`, `start()`, `shutdown()`.\n\nREQUIREMENTS:\n- Java 21.\n- Project must have a `hytale.json` (manifest).\n- Main class extends `JavaPlugin` and takes `JavaPluginInit` in constructor.\n\nAPI PATTERNS:\n- Events: `getEventRegistry().register(ClassName.class, event -> { ... })`\n- Commands: `getCommandRegistry().registerCommand(new YourCommand())`. Commands extend `AbstractCommand`.\n- Logging: `getLogger().info(\"msg\")`.\n\nOUTPUT:\n- Generate complete `src/main/java` class files.\n- Generate valid `hytale.json` if missing.\n- Use minimal imports. Do not assume Bukkit/Spigot existence. This is Hytale.",
+    "languages": [
+        {
+            "id": "java",
+            "name": "Java",
+            "run_command": "echo 'Run manually'",
+            "file_extension": "java",
+            "compilerCommands": {
+                "install": "gradle --version --no-daemon",
+                "compile": "gradle clean compileJava --no-daemon --stacktrace",
+                "run": "echo 'Run manually'"
+            }
+        }
+    ]
+}

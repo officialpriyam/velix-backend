@@ -1,0 +1,17 @@
+{
+  "Group": "YourName",
+  "Name": "MyPack",
+  "Version": "1.0.0",
+  "Description": "A custom content pack for Hytale",
+  "Authors": [
+    {
+      "Name": "YourName",
+      "Role": "Author"
+    }
+  ],
+  "Website": "",
+  "ServerVersion": "*",
+  "Dependencies": [],
+  "OptionalDependencies": [],
+  "DisabledByDefault": false
+}
