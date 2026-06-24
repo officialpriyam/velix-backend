@@ -639,4 +639,143 @@ router.patch('/projects/:id/settings', asyncHandler(requireAuth), asyncHandler(a
     }
 }));
 
+// ─── Bot Console (Discord bot test runner) ───
+import { spawn, ChildProcess } from 'child_process';
+import path from 'path';
+import os from 'os';
+
+interface BotSession {
+    process: ChildProcess;
+    logs: string[];
+    status: 'running' | 'stopped' | 'error';
+    startedAt: number;
+    timeout: NodeJS.Timeout;
+}
+
+const activeBotSessions = new Map<string, BotSession>();
+
+router.post('/bot/start', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+    const { sessionId, botToken, language, maxMinutes = 10 } = req.body;
+    if (!botToken) return res.status(400).json({ error: 'Bot token is required' });
+
+    // Stop any existing session for this project
+    if (activeBotSessions.has(sessionId)) {
+        const existing = activeBotSessions.get(sessionId)!;
+        existing.process.kill();
+        clearTimeout(existing.timeout);
+        activeBotSessions.delete(sessionId);
+    }
+
+    const sandboxRoot = process.env.SANDBOX_ROOT || path.join(os.tmpdir(), 'velix-sandbox');
+    const projectDir = path.join(sandboxRoot, sessionId);
+
+    try {
+        // Determine run command based on language
+        let runCmd: string;
+        let runArgs: string[];
+        const env = { ...process.env, DISCORD_TOKEN: botToken, NODE_ENV: 'production' };
+
+        if (language === 'python' || language === 'py') {
+            runCmd = 'python3';
+            runArgs = ['bot.py'];
+        } else if (language === 'javascript' || language === 'js' || language === 'typescript' || language === 'ts') {
+            // Check for package.json and install if needed
+            const { execSync } = require('child_process');
+            try {
+                if (require('fs').existsSync(path.join(projectDir, 'package.json'))) {
+                    execSync('npm install --production 2>/dev/null', { cwd: projectDir, timeout: 30000 });
+                }
+            } catch {}
+            runCmd = 'node';
+            runArgs = ['bot.js'];
+        } else if (language === 'ruby') {
+            runCmd = 'ruby';
+            runArgs = ['bot.rb'];
+        } else {
+            runCmd = 'node';
+            runArgs = ['bot.js'];
+        }
+
+        const logs: string[] = [];
+        logs.push(`[${new Date().toISOString()}] Starting bot session...`);
+        logs.push(`[${new Date().toISOString()}] Language: ${language}`);
+        logs.push(`[${new Date().toISOString()}] Session limit: ${maxMinutes} minutes`);
+
+        const child = spawn(runCmd, runArgs, {
+            cwd: projectDir,
+            env,
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        child.stdout?.on('data', (data: Buffer) => {
+            const lines = data.toString().split('\n').filter(l => l.trim());
+            lines.forEach(line => logs.push(`[${new Date().toISOString()}] ${line}`));
+        });
+
+        child.stderr?.on('data', (data: Buffer) => {
+            const lines = data.toString().split('\n').filter(l => l.trim());
+            lines.forEach(line => logs.push(`[${new Date().toISOString()}] [ERR] ${line}`));
+        });
+
+        child.on('close', (code) => {
+            logs.push(`[${new Date().toISOString()}] Process exited with code ${code}`);
+            const session = activeBotSessions.get(sessionId);
+            if (session) {
+                session.status = code === 0 ? 'stopped' : 'error';
+            }
+        });
+
+        child.on('error', (err) => {
+            logs.push(`[${new Date().toISOString()}] [ERROR] ${err.message}`);
+            const session = activeBotSessions.get(sessionId);
+            if (session) session.status = 'error';
+        });
+
+        // Auto-kill after maxMinutes
+        const timeout = setTimeout(() => {
+            logs.push(`[${new Date().toISOString()}] Session time limit reached. Stopping...`);
+            child.kill();
+            const session = activeBotSessions.get(sessionId);
+            if (session) session.status = 'stopped';
+        }, maxMinutes * 60 * 1000);
+
+        activeBotSessions.set(sessionId, {
+            process: child,
+            logs,
+            status: 'running',
+            startedAt: Date.now(),
+            timeout
+        });
+
+        res.json({ success: true, message: 'Bot started' });
+    } catch (error: any) {
+        console.error('[Bot Console] Start error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+}));
+
+router.post('/bot/stop/:sessionId', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+    const { sessionId } = req.params;
+    const session = activeBotSessions.get(sessionId);
+    if (!session) return res.json({ success: true, message: 'No active session' });
+
+    session.process.kill();
+    clearTimeout(session.timeout);
+    session.status = 'stopped';
+    session.logs.push(`[${new Date().toISOString()}] Bot stopped by user`);
+
+    // Clean up after a delay
+    setTimeout(() => activeBotSessions.delete(sessionId), 60000);
+
+    res.json({ success: true });
+}));
+
+router.get('/bot/logs/:sessionId', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+    const { sessionId } = req.params;
+    const session = activeBotSessions.get(sessionId);
+    if (!session) return res.json({ logs: [], status: 'stopped' });
+
+    res.json({ logs: session.logs, status: session.status });
+}));
+
 export default router;
