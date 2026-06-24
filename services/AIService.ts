@@ -756,6 +756,13 @@ export const enhancePrompt = async (prompt: string, platform?: string, language?
         throw new Error("OpenRouter API Key not configured");
     }
 
+    // Detect fix/error requests — skip enhancement, return as-is
+    const fixPatterns = /fix|error|bug|crash|compile|failed|broken|issue|debug|ModuleNotFoundError|ImportError|SyntaxError|TypeError|ReferenceError|ENOENT|Cannot find/i;
+    if (fixPatterns.test(prompt) && prompt.length < 3000) {
+        console.log(`[AIService] Fix request detected — skipping enhancement`);
+        return prompt;
+    }
+
     // Gather platform context for better enhancement
     let platformContext = '';
     try {
