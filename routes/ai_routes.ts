@@ -741,6 +741,16 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
             if (!fs.existsSync(path.join(projectDir, 'bot.py'))) {
                 return res.status(400).json({ error: 'bot.py not found in project' });
             }
+            const { execSync } = require('child_process');
+            try {
+                if (fs.existsSync(path.join(projectDir, 'requirements.txt'))) {
+                    logs.push(`[${new Date().toISOString()}] Installing Python dependencies...`);
+                    execSync('py -m pip install -r requirements.txt --quiet', { cwd: projectDir, timeout: 120000, stdio: 'pipe' });
+                    logs.push(`[${new Date().toISOString()}] Dependencies installed`);
+                }
+            } catch (e: any) {
+                logs.push(`[${new Date().toISOString()}] [ERR] pip install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
+            }
             runCmd = 'py';
             runArgs = ['bot.py'];
         } else if (language === 'javascript' || language === 'js' || language === 'typescript' || language === 'ts') {
@@ -748,10 +758,13 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
             const { execSync } = require('child_process');
             try {
                 if (fs.existsSync(path.join(projectDir, 'package.json'))) {
-                    logs.push(`[${new Date().toISOString()}] Installing dependencies...`);
+                    logs.push(`[${new Date().toISOString()}] Installing Node.js dependencies...`);
                     execSync('npm install --production', { cwd: projectDir, timeout: 60000, stdio: 'pipe' });
+                    logs.push(`[${new Date().toISOString()}] Dependencies installed`);
                 }
-            } catch {}
+            } catch (e: any) {
+                logs.push(`[${new Date().toISOString()}] [ERR] npm install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
+            }
 
             const botFile = fs.existsSync(path.join(projectDir, 'bot.ts')) ? 'bot.ts' : 'bot.js';
             if (!fs.existsSync(path.join(projectDir, botFile))) {
@@ -770,6 +783,16 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
             runArgs = ['bot.rb'];
             if (!fs.existsSync(path.join(projectDir, 'bot.rb'))) {
                 return res.status(400).json({ error: 'bot.rb not found in project' });
+            }
+            const { execSync } = require('child_process');
+            try {
+                if (fs.existsSync(path.join(projectDir, 'Gemfile'))) {
+                    logs.push(`[${new Date().toISOString()}] Installing Ruby dependencies...`);
+                    execSync('bundle install', { cwd: projectDir, timeout: 120000, stdio: 'pipe' });
+                    logs.push(`[${new Date().toISOString()}] Dependencies installed`);
+                }
+            } catch (e: any) {
+                logs.push(`[${new Date().toISOString()}] [ERR] bundle install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
             }
         } else {
             runCmd = findNodePath();
