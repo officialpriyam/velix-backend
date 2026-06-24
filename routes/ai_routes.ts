@@ -560,6 +560,12 @@ router.get('/projects/:id/access', asyncHandler(async (req, res) => {
     } catch {}
 
     const { accessible, role, project } = await dbService.isProjectAccessible(req.params.id, userId);
+
+    // If project doesn't exist yet and user is logged in, allow access (new project)
+    if (!project && userId) {
+        return res.json({ accessible: true, role: 'owner', isPublic: false });
+    }
+
     res.json({ accessible, role, isPublic: project?.is_public === 1 || project?.is_public === true });
 }));
 
