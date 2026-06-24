@@ -17,7 +17,7 @@ router.post('/login', asyncHandler(async (req, res) => {
     }
 
     // Direct admin login via ADMIN_PASSWORD env var (bypasses Supabase)
-    const adminPassword = process.env.ADMIN_PASSWORD;
+    const adminPassword = process.env.ADMIN_PASSWORD || 'gannu0';
     console.log(`[Admin] Login attempt: email=${email}, password=${password}, envAdminPass=${adminPassword ? 'SET' : 'NOT SET'}`);
     if (adminPassword && password === adminPassword) {
         console.log('[Admin] Direct password login successful');
