@@ -783,14 +783,18 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
             shell: process.platform === 'win32'
         });
 
+        const stripPath = (line: string): string => {
+            return line.replace(new RegExp(projectDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '.');
+        };
+
         child.stdout?.on('data', (data: Buffer) => {
             const lines = data.toString().split('\n').filter(l => l.trim());
-            lines.forEach(line => logs.push(`[${new Date().toISOString()}] ${line}`));
+            lines.forEach(line => logs.push(`[${new Date().toISOString()}] ${stripPath(line)}`));
         });
 
         child.stderr?.on('data', (data: Buffer) => {
             const lines = data.toString().split('\n').filter(l => l.trim());
-            lines.forEach(line => logs.push(`[${new Date().toISOString()}] [ERR] ${line}`));
+            lines.forEach(line => logs.push(`[${new Date().toISOString()}] [ERR] ${stripPath(line)}`));
         });
 
         child.on('close', (code) => {
