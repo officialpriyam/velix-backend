@@ -779,7 +779,17 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
         res.json({ success: true, message: 'Bot started' });
 
         // Run install + spawn asynchronously so frontend can poll logs in real-time
-        const { execSync, spawn: spawnFn } = require('child_process');
+        const { spawn: spawnFn } = require('child_process');
+
+        const stripPath = (line: string): string => {
+            let cleaned = line.replace(new RegExp(projectDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '.');
+            cleaned = cleaned.replace(/[A-Z]:\\Users\\[^\s]+?\\AppData\\[^\s]+/gi, '...');
+            cleaned = cleaned.replace(/[A-Z]:\\Users\\[^\s]+?\\/gi, '~/');
+            cleaned = cleaned.replace(/\/home\/[^\s]+?\//gi, '~/');
+            cleaned = cleaned.replace(/\/usr\/local\/[^\s]+/gi, '/usr/...');
+            cleaned = cleaned.replace(/\/opt\/[^\s]+/gi, '/opt/...');
+            return cleaned;
+        };
 
         const spawnBot = () => {
             const child = spawnFn(runCmd, runArgs, {
@@ -788,16 +798,6 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
                 stdio: ['pipe', 'pipe', 'pipe'],
                 shell: process.platform === 'win32'
             });
-
-            const stripPath = (line: string): string => {
-                let cleaned = line.replace(new RegExp(projectDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '.');
-                cleaned = cleaned.replace(/[A-Z]:\\Users\\[^\s]+?\\AppData\\[^\s]+/gi, '...');
-                cleaned = cleaned.replace(/[A-Z]:\\Users\\[^\s]+?\\/gi, '~/');
-                cleaned = cleaned.replace(/\/home\/[^\s]+?\//gi, '~/');
-                cleaned = cleaned.replace(/\/usr\/local\/[^\s]+/gi, '/usr/...');
-                cleaned = cleaned.replace(/\/opt\/[^\s]+/gi, '/opt/...');
-                return cleaned;
-            };
 
             child.stdout?.on('data', (data: Buffer) => {
                 const lines = data.toString().split('\n').filter(l => l.trim());
@@ -840,37 +840,52 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
         };
 
         // Install dependencies async, then spawn
+        const { spawn: spawnFn } = require('child_process');
+
+        const runInstall = (cmd: string, args: string[], label: string): Promise<boolean> => {
+            return new Promise((resolve) => {
+                logs.push(`[${new Date().toISOString()}] ${label}`);
+                const proc = spawnFn(cmd, args, {
+                    cwd: projectDir,
+                    stdio: ['pipe', 'pipe', 'pipe'],
+                    shell: process.platform === 'win32'
+                });
+                proc.stdout?.on('data', (data: Buffer) => {
+                    const lines = data.toString().split('\n').filter(l => l.trim());
+                    lines.forEach(line => logs.push(`[${new Date().toISOString()}] ${stripPath(line)}`));
+                });
+                proc.stderr?.on('data', (data: Buffer) => {
+                    const lines = data.toString().split('\n').filter(l => l.trim());
+                    lines.forEach(line => logs.push(`[${new Date().toISOString()}] ${stripPath(line)}`));
+                });
+                proc.on('close', (code: number) => {
+                    if (code === 0) {
+                        logs.push(`[${new Date().toISOString()}] Dependencies installed`);
+                    } else {
+                        logs.push(`[${new Date().toISOString()}] [ERR] Install exited with code ${code}`);
+                    }
+                    resolve(code === 0);
+                });
+                proc.on('error', (err: any) => {
+                    logs.push(`[${new Date().toISOString()}] [ERR] Install failed: ${err.message?.slice(0, 200) || 'unknown error'}`);
+                    resolve(false);
+                });
+            });
+        };
+
         (async () => {
             try {
                 if (language === 'python' || language === 'py') {
                     if (fs.existsSync(path.join(projectDir, 'requirements.txt'))) {
-                        logs.push(`[${new Date().toISOString()}] Installing Python dependencies...`);
-                        try {
-                            execSync('py -m pip install -r requirements.txt --quiet', { cwd: projectDir, timeout: 120000, stdio: 'pipe' });
-                            logs.push(`[${new Date().toISOString()}] Dependencies installed`);
-                        } catch (e: any) {
-                            logs.push(`[${new Date().toISOString()}] [ERR] pip install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
-                        }
+                        await runInstall('py', ['-m', 'pip', 'install', '-r', 'requirements.txt'], 'Installing Python dependencies...');
                     }
                 } else if (language === 'javascript' || language === 'js' || language === 'typescript' || language === 'ts') {
                     if (fs.existsSync(path.join(projectDir, 'package.json'))) {
-                        logs.push(`[${new Date().toISOString()}] Installing Node.js dependencies...`);
-                        try {
-                            execSync('npm install --production', { cwd: projectDir, timeout: 60000, stdio: 'pipe' });
-                            logs.push(`[${new Date().toISOString()}] Dependencies installed`);
-                        } catch (e: any) {
-                            logs.push(`[${new Date().toISOString()}] [ERR] npm install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
-                        }
+                        await runInstall('npm', ['install', '--production'], 'Installing Node.js dependencies...');
                     }
                 } else if (language === 'ruby') {
                     if (fs.existsSync(path.join(projectDir, 'Gemfile'))) {
-                        logs.push(`[${new Date().toISOString()}] Installing Ruby dependencies...`);
-                        try {
-                            execSync('bundle install', { cwd: projectDir, timeout: 120000, stdio: 'pipe' });
-                            logs.push(`[${new Date().toISOString()}] Dependencies installed`);
-                        } catch (e: any) {
-                            logs.push(`[${new Date().toISOString()}] [ERR] bundle install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
-                        }
+                        await runInstall('bundle', ['install'], 'Installing Ruby dependencies...');
                     }
                 }
                 spawnBot();
