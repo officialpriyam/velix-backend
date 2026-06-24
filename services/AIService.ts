@@ -289,9 +289,90 @@ FILE: path/to/file.sh
 ## REFERENCE
 ${cappedDocs}
 ${cappedSkills}`;
+        } else if (platform === 'discord') {
+            // DISCORD BOT GENERATION MODE
+            const isPython = language === 'python' || language === 'py';
+            const isRuby = language === 'ruby';
+            const isJs = language === 'javascript' || language === 'js';
+            const isTs = language === 'typescript' || language === 'ts';
+            const langLabel = isPython ? 'Python' : isRuby ? 'Ruby' : isTs ? 'TypeScript' : 'JavaScript';
+            const framework = isPython ? 'discord.py' : isRuby ? 'discordrb' : 'discord.js';
+            const ext = isPython ? '.py' : isRuby ? '.rb' : isTs ? '.ts' : '.js';
+            const codeLang = isPython ? 'python' : isRuby ? 'ruby' : isTs ? 'typescript' : 'javascript';
+
+            enhancedSystemPrompt = `You are an elite Discord bot developer. Your ONLY job is to generate COMPLETE, PRODUCTION-READY Discord bot code in ${langLabel} using ${framework} that runs on the FIRST attempt.
+
+## CRITICAL: THIS IS A DISCORD BOT — NOT A MINECRAFT PLUGIN
+DO NOT generate: pom.xml, build.gradle.kts, plugin.yml, .java files, .kt files, or ANY Minecraft-related code.
+DO NOT generate: org.bukkit, JavaPlugin, or ANY Java/Kotlin code.
+ONLY generate: ${langLabel} files for a Discord bot using ${framework}.
+
+## ${langLabel.toUpperCase()} DISCORD BOT RULES (${framework})
+${isPython ? `1. Use discord.py 2.x (pip install discord.py)
+2. Main file: bot.py
+3. Use commands.Bot() with proper intents
+4. Include on_ready event
+5. Use @bot.command() for slash or prefix commands
+6. Use proper async/await patterns
+7. Include requirements.txt` : isRuby ? `1. Use discordrb gem (gem install discordrb)
+2. Main file: bot.rb
+3. Use Discordrb::Bot.new with proper token
+4. Include bot.ready event
+5. Use bot.command for prefix commands
+6. Include Gemfile with discordrb` : `1. Use discord.js v14 (npm install discord.js)
+2. Main file: bot.${ext.replace('.', '')}
+3. Use Client with proper intents (GatewayIntentBits)
+4. Use Events.ClientReady for startup
+5. Use SlashCommandBuilder for slash commands
+6. Use proper async/await with try/catch
+7. Include package.json with discord.js dependency`}
+
+## OUTPUT FORMAT (MANDATORY)
+For EACH file, output exactly:
+FILE: ${isPython ? 'bot.py' : isRuby ? 'bot.rb' : 'bot.' + ext.replace('.', '')}
+\`\`\`${codeLang}
+[complete file content]
+\`\`\`
+
+${isPython ? `FILE: requirements.txt
+\`\`\`
+discord.py>=2.0.0
+python-dotenv>=1.0.0
+\`\`\`` : isRuby ? `FILE: Gemfile
+\`\`\`ruby
+source 'https://rubygems.org'
+gem 'discordrb', '~> 3.5'
+\`\`\`` : `FILE: package.json
+\`\`\`json
+{
+  "name": "discord-bot",
+  "version": "1.0.0",
+  "main": "bot.${ext.replace('.', '')}",
+  "dependencies": {
+    "discord.js": "^14.11.0",
+    "dotenv": "^16.0.0"
+  }
+}
+\`\`\``}
+
+## CODE RULES
+- Complete, runnable code — NO placeholders, NO TODOs
+- Include error handling (try/catch or begin/rescue)
+- Include command examples and help text
+- Use environment variables for bot token (process.env.DISCORD_TOKEN)
+- Include proper event handlers (ready, message, interactionCreate)
+
+## RESPONSE FORMAT
+- Output ONLY file blocks with FILE: header and code fences
+- NO explanations, NO prose, NO markdown commentary
+- EVERY file must be COMPLETE — all imports, all methods, all logic
+
+## REFERENCE
+${cappedDocs}
+${cappedSkills}`;
         } else {
-            // DEFAULT: CODE GENERATION MODE (plugins, mods, bots, extensions)
-            enhancedSystemPrompt = `You are an elite software engineer specializing in Minecraft server plugins, Hytale plugins, and Discord bots. Your ONLY job is to generate COMPLETE, PRODUCTION-READY code that compiles and runs on the FIRST attempt.
+            // DEFAULT: CODE GENERATION MODE (plugins, mods, extensions)
+            enhancedSystemPrompt = `You are an elite software engineer specializing in Minecraft server plugins and Hytale plugins. Your ONLY job is to generate COMPLETE, PRODUCTION-READY code that compiles and runs on the FIRST attempt.
 
 ## CRITICAL: COMPILE-FIRST RULES
 Your code MUST compile with zero errors. Follow these rules exactly:
@@ -648,29 +729,30 @@ export const enhancePrompt = async (prompt: string, platform?: string, language?
     if (isConfig) modeLabel = 'server configuration';
     else if (isDatapack) modeLabel = 'datapack';
     else if (isScripting) modeLabel = 'command scripting';
+    else if (platform === 'discord') modeLabel = 'Discord bot';
+
+    const langLabel = language === 'python' || language === 'py' ? 'Python' : language === 'ruby' ? 'Ruby' : language === 'typescript' || language === 'ts' ? 'TypeScript' : language === 'javascript' || language === 'js' ? 'JavaScript' : 'Java';
 
     const model = "openai/gpt-oss-20b:free";
-    const systemPrompt = `You are an expert Minecraft ${modeLabel} architect. Your job is to take a brief user request and transform it into a DETAILED, COMPLETE technical specification that an AI code generator can use to produce PRODUCTION-READY ${modeLabel} files on the FIRST attempt.
+    const systemPrompt = `You are an expert ${platformLabel} architect. Your job is to take a brief user request and transform it into a DETAILED, COMPLETE technical specification that an AI code generator can use to produce PRODUCTION-READY ${modeLabel} files on the FIRST attempt.
 
 ## OUTPUT FORMAT
 Return ONLY the enhanced specification. NO commentary, NO explanations.
 
 ## SPEC STRUCTIFICATION (include ALL of these):
 1. **Project Name**: A clear, descriptive name
-2. **Package Name** (for plugins only): Derived from project name (NOT com.example)
+2. **${platform === 'discord' ? 'Bot Name' : 'Package Name'}** ${platform === 'discord' ? '(Discord bot application name)' : '(for plugins only): Derived from project name (NOT com.example)'}
 3. **Features List**: Every feature the ${modeLabel} must have, with brief descriptions
 4. **File Structure**: List EVERY file that needs to be created with its full path:
-   ${isConfig ? '- config.yml (main plugin config with ALL settings)\n   - messages.yml (localization strings)\n   - (any additional config files needed)' : isDatapack ? '- pack.mcmeta\n   - data/<namespace>/function/main.mcfunction\n   - data/<namespace>/function/tick.mcfunction\n   - data/<namespace>/tags/function/load.json\n   - data/<namespace>/tags/function/tick.json\n   - (any additional functions, advancements, loot tables, recipes, predicates)' : isScripting ? '- data/<namespace>/function/script.mcfunction\n   - (any additional .mcfunction or .sh files)' : '- src/main/java/com/xxx/MainPlugin.java\n   - src/main/resources/plugin.yml\n   - pom.xml (for Java) or build.gradle.kts (for Kotlin)\n   - Any additional classes, configs, etc.'}
-5. **Build System** (plugins only): Specify exactly:
-   - Java: pom.xml with paper-api dependency, Java 21
-   - Kotlin: build.gradle.kts with kotlin-jvm plugin, paper-api
-6. **Configuration Options** (for config mode): List ALL config options with types, defaults, and descriptions
+   ${isConfig ? '- config.yml (main plugin config with ALL settings)\n   - messages.yml (localization strings)\n   - (any additional config files needed)' : isDatapack ? '- pack.mcmeta\n   - data/<namespace>/function/main.mcfunction\n   - data/<namespace>/function/tick.mcfunction\n   - data/<namespace>/tags/function/load.json\n   - data/<namespace>/tags/function/tick.json\n   - (any additional functions, advancements, loot tables, recipes, predicates)' : isScripting ? '- data/<namespace>/function/script.mcfunction\n   - (any additional .mcfunction or .sh files)' : platform === 'discord' ? (langLabel === 'Python' ? '- bot.py (main bot file)\n   - requirements.txt\n   - .env (with DISCORD_TOKEN)' : langLabel === 'Ruby' ? '- bot.rb (main bot file)\n   - Gemfile\n   - .env (with DISCORD_TOKEN)' : '- bot.js or bot.ts (main bot file)\n   - package.json\n   - .env (with DISCORD_TOKEN)') : '- src/main/java/com/xxx/MainPlugin.java\n   - src/main/resources/plugin.yml\n   - pom.xml (for Java) or build.gradle.kts (for Kotlin)\n   - Any additional classes, configs, etc.'}
+5. **Build System** ${platform === 'discord' ? '(dependency file)' : '(plugins only)'}: Specify exactly:
+   ${platform === 'discord' ? (langLabel === 'Python' ? '- requirements.txt with discord.py' : langLabel === 'Ruby' ? '- Gemfile with discordrb' : '- package.json with discord.js') : '- Java: pom.xml with paper-api dependency, Java 21\n   - Kotlin: build.gradle.kts with kotlin-jvm plugin, paper-api'}
+6. **Configuration Options** ${platform === 'discord' ? '(bot settings)' : '(for config mode)'}: List ALL config options with types, defaults, and descriptions
 7. **Commands** (if applicable): List all commands with usage, descriptions, and permissions
-8. **Datapack Contents** (for datapacks): List all functions, advancements, loot tables, predicates, recipes with their paths
 
 ## RULES
 - Be SPECIFIC about file names, setting names, command syntax, config keys
-- Include actual config keys / command syntax from the plugin documentation if available
+- Include actual config keys / command syntax from the documentation if available
 - Ensure the file structure is COMPLETE — every file needed
 - Keep it concise but comprehensive — this spec will be fed to a code generator
 
