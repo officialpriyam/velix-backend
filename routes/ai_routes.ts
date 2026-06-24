@@ -807,7 +807,14 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
         });
 
         const stripPath = (line: string): string => {
-            return line.replace(new RegExp(projectDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '.');
+            let cleaned = line.replace(new RegExp(projectDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '.');
+            // Strip any local user paths (Windows & Linux)
+            cleaned = cleaned.replace(/[A-Z]:\\Users\\[^\s]+?\\AppData\\[^\s]+/gi, '...');
+            cleaned = cleaned.replace(/[A-Z]:\\Users\\[^\s]+?\\/gi, '~/');
+            cleaned = cleaned.replace(/\/home\/[^\s]+?\//gi, '~/');
+            cleaned = cleaned.replace(/\/usr\/local\/[^\s]+/gi, '/usr/...');
+            cleaned = cleaned.replace(/\/opt\/[^\s]+/gi, '/opt/...');
+            return cleaned;
         };
 
         child.stdout?.on('data', (data: Buffer) => {
