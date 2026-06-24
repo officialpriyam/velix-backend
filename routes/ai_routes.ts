@@ -792,12 +792,16 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
         };
 
         const spawnBot = () => {
-            const child = spawnFn(runCmd, runArgs, {
-                cwd: projectDir,
-                env,
-                stdio: ['pipe', 'pipe', 'pipe'],
-                shell: process.platform === 'win32'
-            });
+            const isWin = process.platform === 'win32';
+            const child = spawnFn(
+                isWin ? 'cmd.exe' : runCmd,
+                isWin ? ['/c', runCmd, ...runArgs] : runArgs,
+                {
+                    cwd: projectDir,
+                    env,
+                    stdio: ['pipe', 'pipe', 'pipe'],
+                }
+            );
 
             child.stdout?.on('data', (data: Buffer) => {
                 const lines = data.toString().split('\n').filter(l => l.trim());
