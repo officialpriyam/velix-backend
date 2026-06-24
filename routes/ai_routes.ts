@@ -737,8 +737,9 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
         };
 
         if (language === 'python' || language === 'py') {
-            runCmd = 'python3';
-            runArgs = ['bot.py'];
+            // On Windows use 'cmd /c py', on Linux use 'python3'
+            runCmd = process.platform === 'win32' ? 'cmd' : 'python3';
+            runArgs = process.platform === 'win32' ? ['/c', 'py', 'bot.py'] : ['bot.py'];
             if (!fs.existsSync(path.join(projectDir, 'bot.py'))) {
                 return res.status(400).json({ error: 'bot.py not found in project' });
             }

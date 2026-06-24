@@ -15,13 +15,35 @@ router.post('/login', asyncHandler(async (req, res) => {
     if (!email || !password) {
         return res.status(400).json({ error: 'Email and password required' });
     }
+
+    // Direct admin login via ADMIN_PASSWORD env var (bypasses Supabase)
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (adminPassword && password === adminPassword) {
+        // Set admin session cookie
+        res.cookie('admin_session', 'true', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        });
+        return res.json({ success: true, admin: true });
+    }
+
+    // Supabase login fallback
     try {
         const { user } = await AuthService.login(email, password);
         const fullUser = await dbService.getUserById(user.id);
         const role = typeof (fullUser as any)?.role === 'string' ? (fullUser as any).role.toLowerCase() : '';
 
         if (fullUser && (role === 'admin' || role === 'superadmin')) {
-            return res.json({ success: true });
+            // Set admin session cookie
+            res.cookie('admin_session', 'true', {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 24 * 60 * 60 * 1000
+            });
+            return res.json({ success: true, admin: true });
         }
 
         return res.status(403).json({ error: 'Insufficient permissions' });
@@ -29,6 +51,19 @@ router.post('/login', asyncHandler(async (req, res) => {
         console.error('Admin login error:', err);
         return res.status(401).json({ error: 'Invalid credentials' });
     }
+}));
+
+router.post('/logout', asyncHandler(async (req, res) => {
+    res.clearCookie('admin_session');
+    res.json({ success: true });
+}));
+
+router.get('/check', asyncHandler(async (req, res) => {
+    const adminSession = req.cookies?.admin_session;
+    if (adminSession === 'true') {
+        return res.json({ authenticated: true });
+    }
+    res.status(401).json({ authenticated: false });
 }));
 
 router.use((req, res, next) => {
