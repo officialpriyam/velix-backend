@@ -58,7 +58,7 @@ export const generateCode = async (
         'nousresearch/hermes-3-llama-3.1-405b:free'
     ];
 
-    const tryGenerate = async (modelName: string): Promise<CodeGenerationResult> => {
+    const tryGenerate = async (modelName: string, maxTokens: number = 8192): Promise<CodeGenerationResult> => {
         const isNvidia = modelName.startsWith('nvidia/') || (config.nvidia_models && config.nvidia_models.includes(modelName));
         const endpoint = isNvidia
             ? "https://integrate.api.nvidia.com/v1/chat/completions"
@@ -416,7 +416,7 @@ ${cappedSkills}`;
                     tools: [searchTool],
                     tool_choice: "auto",
                     temperature: 0.4,
-                    max_tokens: 8192
+                    max_tokens: maxTokens
                 }, {
                     headers: {
                         "Authorization": `Bearer ${apiKey}`,
@@ -465,7 +465,7 @@ ${cappedSkills}`;
                         model: modelName,
                         messages: messages,
                         temperature: 0.4,
-                        max_tokens: 8192
+                        max_tokens: maxTokens
                     }, {
                         headers: {
                             "Authorization": `Bearer ${apiKey}`,
@@ -502,7 +502,7 @@ ${cappedSkills}`;
                     model: modelName,
                     messages: messages,
                     temperature: 0.4,
-                    max_tokens: 8192
+                    max_tokens: maxTokens
                 }, {
                     headers: {
                         "Authorization": `Bearer ${apiKey}`,
@@ -548,16 +548,34 @@ ${cappedSkills}`;
         };
     };
 
-    // Try primary model first, then fallback to free models
+    // Try primary model first, then retry with lower tokens, then fallback to free models
     try {
         return await tryGenerate(selectedModel);
     } catch (primaryError: any) {
         const errMsg = primaryError?.response?.data?.error?.message || primaryError.message || '';
         const isContextError = errMsg.includes('context_length') || errMsg.includes('maximum context') || errMsg.includes('too long');
         const isRateLimit = primaryError?.response?.status === 429 || errMsg.includes('rate limit');
+        const isTokenLimit = errMsg.includes('max_tokens') || errMsg.includes('fewer max_tokens') || errMsg.includes('afford');
         console.warn(`[AIService] Primary model ${selectedModel} failed:`, errMsg);
         if (isContextError) console.warn(`[AIService] Context length exceeded`);
         if (isRateLimit) console.warn(`[AIService] Rate limited — waiting before fallback`);
+        if (isTokenLimit) console.warn(`[AIService] Token limit exceeded — retrying with fewer tokens`);
+
+        // Token limit: retry same model with lower max_tokens
+        if (isTokenLimit) {
+            const reducedTokens = [4096, 2048, 1024];
+            for (const tokens of reducedTokens) {
+                try {
+                    console.log(`[AIService] Retrying ${selectedModel} with max_tokens=${tokens}`);
+                    const result = await tryGenerate(selectedModel, tokens);
+                    console.log(`[AIService] ${selectedModel} succeeded with max_tokens=${tokens}`);
+                    return result;
+                } catch (retryErr: any) {
+                    const retryMsg = retryErr?.response?.data?.error?.message || retryErr.message || '';
+                    console.warn(`[AIService] Retry with max_tokens=${tokens} failed:`, retryMsg);
+                }
+            }
+        }
 
         // Rate limit: wait longer before fallback
         if (isRateLimit) {
@@ -578,6 +596,17 @@ ${cappedSkills}`;
             } catch (fallbackError: any) {
                 const fbMsg = fallbackError?.response?.data?.error?.message || fallbackError.message || '';
                 console.warn(`[AIService] Fallback model ${fallbackModel} failed:`, fbMsg);
+                // If fallback also fails on tokens, try with lower tokens
+                if (fbMsg.includes('max_tokens') || fbMsg.includes('fewer max_tokens') || fbMsg.includes('afford')) {
+                    try {
+                        console.log(`[AIService] Retrying fallback ${fallbackModel} with max_tokens=2048`);
+                        const result = await tryGenerate(fallbackModel, 2048);
+                        console.log(`[AIService] Fallback ${fallbackModel} succeeded with max_tokens=2048`);
+                        return result;
+                    } catch {
+                        console.warn(`[AIService] Fallback ${fallbackModel} also failed with reduced tokens`);
+                    }
+                }
                 continue;
             }
         }
