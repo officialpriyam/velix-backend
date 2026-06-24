@@ -688,8 +688,8 @@ router.post('/bot/start', asyncHandler(requireAuth), asyncHandler(async (req, re
         activeBotSessions.delete(sessionId);
     }
 
-    const sandboxRoot = process.env.SANDBOX_ROOT || path.join(os.tmpdir(), 'velix-sandbox');
-    const projectDir = path.join(sandboxRoot, sessionId);
+    const sandbox = new SandboxContext(sessionId);
+    const projectDir = sandbox.getRootDir();
 
     try {
         // Read bot token from .env file in project
