@@ -741,13 +741,8 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
             if (!fs.existsSync(path.join(projectDir, 'bot.py'))) {
                 return res.status(400).json({ error: 'bot.py not found in project' });
             }
-            if (process.platform === 'win32') {
-                runCmd = 'py';
-                runArgs = ['bot.py'];
-            } else {
-                runCmd = 'python3';
-                runArgs = ['bot.py'];
-            }
+            runCmd = 'py';
+            runArgs = ['bot.py'];
         } else if (language === 'javascript' || language === 'js' || language === 'typescript' || language === 'ts') {
             // Install dependencies if package.json exists
             const { execSync } = require('child_process');

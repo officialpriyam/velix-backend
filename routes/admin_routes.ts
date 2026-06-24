@@ -16,29 +16,13 @@ router.post('/login', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Email and password required' });
     }
 
-    // Direct admin login via ADMIN_PASSWORD env var (bypasses Supabase)
-    const adminPassword = process.env.ADMIN_PASSWORD || 'gannu0';
-    console.log(`[Admin] Login attempt: email=${email}, password=${password}, envAdminPass=${adminPassword ? 'SET' : 'NOT SET'}`);
-    if (adminPassword && password === adminPassword) {
-        console.log('[Admin] Direct password login successful');
-        // Set admin session cookie
-        res.cookie('admin_session', 'true', {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 24 * 60 * 60 * 1000 // 24 hours
-        });
-        return res.json({ success: true, admin: true });
-    }
-
-    // Supabase login fallback
+    // Supabase login — check DB role
     try {
         const { user } = await AuthService.login(email, password);
         const fullUser = await dbService.getUserById(user.id);
         const role = typeof (fullUser as any)?.role === 'string' ? (fullUser as any).role.toLowerCase() : '';
 
         if (fullUser && (role === 'admin' || role === 'superadmin')) {
-            // Set admin session cookie
             res.cookie('admin_session', 'true', {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
@@ -48,7 +32,7 @@ router.post('/login', asyncHandler(async (req, res) => {
             return res.json({ success: true, admin: true });
         }
 
-        return res.status(403).json({ error: 'Insufficient permissions' });
+        return res.status(403).json({ error: 'Insufficient permissions — admin role required' });
     } catch (err) {
         console.error('Admin login error:', err);
         return res.status(401).json({ error: 'Invalid credentials' });
