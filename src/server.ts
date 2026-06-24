@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import fs from 'fs';
 import yaml from 'yaml';
 import path from 'path';
@@ -16,8 +18,17 @@ const asyncHandler = (fn: (req: express.Request, res: express.Response, next: ex
     (req: express.Request, res: express.Response, next: express.NextFunction) =>
         Promise.resolve(fn(req, res, next)).catch(next);
 
+// ─── SECURITY HEADERS (helmet) ───
+app.use(helmet({
+    contentSecurityPolicy: false, // Handled by Next.js frontend
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: false,
+}));
+
+// Disable x-powered-by (redundant with helmet but belt-and-suspenders)
 app.disable('x-powered-by');
 
+// ─── CORS ───
 app.use(cors({
     origin: (origin, callback) => {
         const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000')
@@ -33,16 +44,75 @@ app.use(cors({
     },
     credentials: true
 }));
-app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Referrer-Policy', 'same-origin');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    next();
+
+// ─── RATE LIMITING ───
+// Global rate limit: 200 requests per minute per IP
+const globalLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests. Please try again later." },
+    keyGenerator: (req) => {
+        return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+            || req.headers['x-real-ip'] as string
+            || req.socket?.remoteAddress
+            || 'unknown';
+    }
 });
+
+// Auth rate limit: 10 requests per minute per IP (prevents brute force)
+const authLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many auth attempts. Please try again later." },
+    keyGenerator: (req) => {
+        return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+            || req.headers['x-real-ip'] as string
+            || req.socket?.remoteAddress
+            || 'unknown';
+    }
+});
+
+// AI generation rate limit: 20 requests per minute per IP
+const aiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many generation requests. Please slow down." },
+    keyGenerator: (req) => {
+        return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+            || req.headers['x-real-ip'] as string
+            || req.socket?.remoteAddress
+            || 'unknown';
+    }
+});
+
+// Compiler rate limit: 10 requests per minute per IP
+const compilerLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many compile requests. Please slow down." },
+    keyGenerator: (req) => {
+        return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+            || req.headers['x-real-ip'] as string
+            || req.socket?.remoteAddress
+            || 'unknown';
+    }
+});
+
+app.use(globalLimiter);
+
+// ─── BODY PARSING ───
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 app.use(cookieParser());
 
-// Request logger with IP and details
+// ─── REQUEST LOGGER WITH IP ───
 app.use((req, res, next) => {
     const start = Date.now();
     const ip = req.headers['x-forwarded-for'] as string || req.headers['x-real-ip'] as string || req.socket?.remoteAddress || 'unknown';
@@ -57,6 +127,24 @@ app.use((req, res, next) => {
         console.log(`[${new Date().toISOString()}] ${statusColor}${status}${reset} ${req.method} ${req.url} | IP: ${ip} | ${duration}ms | Origin: ${origin}`);
     });
 
+    next();
+});
+
+// ─── INPUT SANITIZATION MIDDLEWARE ───
+app.use((req, res, next) => {
+    // Strip null bytes from body (prevents null byte injection)
+    if (req.body && typeof req.body === 'object') {
+        const sanitize = (obj: any): void => {
+            for (const key in obj) {
+                if (typeof obj[key] === 'string') {
+                    obj[key] = obj[key].replace(/\0/g, '');
+                } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                    sanitize(obj[key]);
+                }
+            }
+        };
+        sanitize(req.body);
+    }
     next();
 });
 
@@ -93,11 +181,12 @@ import imageRoutes from '../routes/image_routes';
 import modelgenRoutes from '../routes/modelgen_routes';
 import gitbookRoutes from '../routes/gitbook_routes';
 
-app.use('/api/ai', aiRoutes);
-app.use('/api/compiler', compilerRoutes);
+// Apply rate limiters to specific routes
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/ai', aiLimiter, aiRoutes);
+app.use('/api/compiler', compilerLimiter, compilerRoutes);
 app.use('/api/files', fileRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', authLimiter, adminRoutes);
 app.use('/api/docs', docsRoutes);
 app.use('/api/versions', versionRoutes);
 app.use('/api/dependencies', dependencyRoutes);
@@ -109,7 +198,9 @@ app.use('/api/gitbook', gitbookRoutes);
 // Global error handler — always return JSON, never HTML
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error('[Server] Unhandled error:', err);
-    res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+    // Don't leak error details in production
+    const message = process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message || 'Internal server error');
+    res.status(err.status || 500).json({ error: message });
 });
 
 
