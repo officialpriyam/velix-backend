@@ -680,6 +680,7 @@ const activeBotSessions = new Map<string, BotSession>();
 router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
     try {
     const { sessionId, language, maxMinutes = 10 } = req.body;
+    console.log(`[Bot Console] Start: sessionId=${sessionId}, language=${language}, platform=${process.platform}`);
 
     // Stop any existing session for this project
     if (activeBotSessions.has(sessionId)) {
