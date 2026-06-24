@@ -446,10 +446,10 @@ ${cappedSkills}`;
         ];
 
         // Inject conversation history so AI remembers previous context
-        // Cap history to avoid exceeding context window: max 10 messages, max 3000 chars total
-        const MAX_HISTORY_CHARS = 3000;
+        // Cap history to avoid exceeding context window: max 20 messages, max 6000 chars total
+        const MAX_HISTORY_CHARS = 6000;
         if (history && history.length > 0) {
-            const trimmedHistory = history.slice(-10);
+            const trimmedHistory = history.slice(-20);
             let historyChars = 0;
             for (const msg of trimmedHistory) {
                 const msgLen = msg.content.length;
@@ -457,7 +457,7 @@ ${cappedSkills}`;
                 historyChars += msgLen;
                 messages.push({
                     role: msg.role === 'user' ? 'user' : 'assistant',
-                    content: msg.content.length > 1500 ? msg.content.slice(0, 1500) + '...' : msg.content
+                    content: msg.content.length > 2000 ? msg.content.slice(0, 2000) + '...' : msg.content
                 });
             }
             console.log(`[AIService] Injected ${messages.length - 1} history messages (${historyChars} chars)`);

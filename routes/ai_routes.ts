@@ -145,10 +145,28 @@ router.post('/generate', asyncHandler(requireAuth), asyncHandler(async (req, res
         console.warn('[AI Routes] Failed to create project record:', e.message);
     }
 
-    // Save chat history (non-critical)
+    // Save chat history (non-critical) — save a summary, not raw code
     try {
         await dbService.addMessage(sessionId, 'user', prompt);
-        await dbService.addMessage(sessionId, 'assistant', rawResponse.slice(0, 4000));
+
+        // Build a compact summary of what was generated instead of saving raw code
+        const fileList = files.map(f => f.path).join(', ');
+        const fileCount = files.length;
+        const languageLabel = language || 'unknown';
+        const platformLabel = platform || 'unknown';
+        const summaryParts = [
+            `Generated ${fileCount} ${platformLabel}/${languageLabel} file(s): ${fileList}`,
+        ];
+        if (rawResponse) {
+            // Extract only non-code explanation lines from the response
+            const explanationLines = rawResponse.split('\n')
+                .filter(line => !line.startsWith('```') && !line.startsWith('FILE:') && !line.match(/^\*\*.*\*\*$/) && line.trim().length > 0)
+                .slice(0, 10)
+                .join('\n');
+            if (explanationLines) summaryParts.push(explanationLines);
+        }
+        const summary = summaryParts.join('\n\n');
+        await dbService.addMessage(sessionId, 'assistant', summary.slice(0, 2000));
     } catch (e: any) {
         console.warn('[AI Routes] Failed to save chat history:', e.message);
     }
