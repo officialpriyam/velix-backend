@@ -929,7 +929,17 @@ export const parseAICodeResponse = (response: string): GeneratedFile[] => {
         }
     }
 
-    return files;
+    // Filter out invalid files (no extension, "error", "none", etc.)
+    const validExtensions = /\.(java|kt|xml|json|gradle|kts|yml|yaml|txt|properties|py|js|ts|rb|toml|cfg|html|css|sh|mcfunction|env|lock)$/i;
+    const validFiles = files.filter(f => {
+        const name = f.path.split('/').pop() || '';
+        if (['error', 'none', 'undefined', 'null', 'true', 'false'].includes(name.toLowerCase())) return false;
+        if (!validExtensions.test(f.path)) return false;
+        if (f.content.length < 5) return false;
+        return true;
+    });
+
+    return validFiles.length > 0 ? validFiles : files;
 };
 
 /**
