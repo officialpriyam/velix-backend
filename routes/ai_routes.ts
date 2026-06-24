@@ -845,11 +845,15 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
         const runInstall = (cmd: string, args: string[], label: string): Promise<boolean> => {
             return new Promise((resolve) => {
                 logs.push(`[${new Date().toISOString()}] ${label}`);
-                const proc = spawnFn(cmd, args, {
-                    cwd: projectDir,
-                    stdio: ['pipe', 'pipe', 'pipe'],
-                    shell: process.platform === 'win32'
-                });
+                const isWin = process.platform === 'win32';
+                const proc = spawnFn(
+                    isWin ? 'cmd.exe' : cmd,
+                    isWin ? ['/c', cmd, ...args] : args,
+                    {
+                        cwd: projectDir,
+                        stdio: ['pipe', 'pipe', 'pipe'],
+                    }
+                );
                 proc.stdout?.on('data', (data: Buffer) => {
                     const lines = data.toString().split('\n').filter(l => l.trim());
                     lines.forEach(line => logs.push(`[${new Date().toISOString()}] ${stripPath(line)}`));
