@@ -741,36 +741,13 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
             if (!fs.existsSync(path.join(projectDir, 'bot.py'))) {
                 return res.status(400).json({ error: 'bot.py not found in project' });
             }
-            const { execSync } = require('child_process');
-            try {
-                if (fs.existsSync(path.join(projectDir, 'requirements.txt'))) {
-                    logs.push(`[${new Date().toISOString()}] Installing Python dependencies...`);
-                    execSync('py -m pip install -r requirements.txt --quiet', { cwd: projectDir, timeout: 120000, stdio: 'pipe' });
-                    logs.push(`[${new Date().toISOString()}] Dependencies installed`);
-                }
-            } catch (e: any) {
-                logs.push(`[${new Date().toISOString()}] [ERR] pip install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
-            }
             runCmd = 'py';
             runArgs = ['bot.py'];
         } else if (language === 'javascript' || language === 'js' || language === 'typescript' || language === 'ts') {
-            // Install dependencies if package.json exists
-            const { execSync } = require('child_process');
-            try {
-                if (fs.existsSync(path.join(projectDir, 'package.json'))) {
-                    logs.push(`[${new Date().toISOString()}] Installing Node.js dependencies...`);
-                    execSync('npm install --production', { cwd: projectDir, timeout: 60000, stdio: 'pipe' });
-                    logs.push(`[${new Date().toISOString()}] Dependencies installed`);
-                }
-            } catch (e: any) {
-                logs.push(`[${new Date().toISOString()}] [ERR] npm install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
-            }
-
             const botFile = fs.existsSync(path.join(projectDir, 'bot.ts')) ? 'bot.ts' : 'bot.js';
             if (!fs.existsSync(path.join(projectDir, botFile))) {
                 return res.status(400).json({ error: `${botFile} not found in project` });
             }
-
             if (botFile.endsWith('.ts')) {
                 runCmd = findNodePath();
                 runArgs = ['--require', 'ts-node/register', botFile];
@@ -784,80 +761,125 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
             if (!fs.existsSync(path.join(projectDir, 'bot.rb'))) {
                 return res.status(400).json({ error: 'bot.rb not found in project' });
             }
-            const { execSync } = require('child_process');
-            try {
-                if (fs.existsSync(path.join(projectDir, 'Gemfile'))) {
-                    logs.push(`[${new Date().toISOString()}] Installing Ruby dependencies...`);
-                    execSync('bundle install', { cwd: projectDir, timeout: 120000, stdio: 'pipe' });
-                    logs.push(`[${new Date().toISOString()}] Dependencies installed`);
-                }
-            } catch (e: any) {
-                logs.push(`[${new Date().toISOString()}] [ERR] bundle install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
-            }
         } else {
             runCmd = findNodePath();
             runArgs = ['bot.js'];
         }
 
-        const child = spawn(runCmd, runArgs, {
-            cwd: projectDir,
-            env,
-            stdio: ['pipe', 'pipe', 'pipe'],
-            shell: process.platform === 'win32'
+        // Register session immediately so logs endpoint works during install
+        activeBotSessions.set(sessionId, {
+            process: null as any,
+            logs,
+            status: 'starting',
+            startedAt: Date.now(),
+            timeout: null as any
         });
 
-        const stripPath = (line: string): string => {
-            let cleaned = line.replace(new RegExp(projectDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '.');
-            // Strip any local user paths (Windows & Linux)
-            cleaned = cleaned.replace(/[A-Z]:\\Users\\[^\s]+?\\AppData\\[^\s]+/gi, '...');
-            cleaned = cleaned.replace(/[A-Z]:\\Users\\[^\s]+?\\/gi, '~/');
-            cleaned = cleaned.replace(/\/home\/[^\s]+?\//gi, '~/');
-            cleaned = cleaned.replace(/\/usr\/local\/[^\s]+/gi, '/usr/...');
-            cleaned = cleaned.replace(/\/opt\/[^\s]+/gi, '/opt/...');
-            return cleaned;
-        };
+        // Send response immediately — install + spawn runs async
+        res.json({ success: true, message: 'Bot started' });
 
-        child.stdout?.on('data', (data: Buffer) => {
-            const lines = data.toString().split('\n').filter(l => l.trim());
-            lines.forEach(line => logs.push(`[${new Date().toISOString()}] ${stripPath(line)}`));
-        });
+        // Run install + spawn asynchronously so frontend can poll logs in real-time
+        const { execSync, spawn: spawnFn } = require('child_process');
 
-        child.stderr?.on('data', (data: Buffer) => {
-            const lines = data.toString().split('\n').filter(l => l.trim());
-            lines.forEach(line => logs.push(`[${new Date().toISOString()}] [ERR] ${stripPath(line)}`));
-        });
+        const spawnBot = () => {
+            const child = spawnFn(runCmd, runArgs, {
+                cwd: projectDir,
+                env,
+                stdio: ['pipe', 'pipe', 'pipe'],
+                shell: process.platform === 'win32'
+            });
 
-        child.on('close', (code) => {
-            logs.push(`[${new Date().toISOString()}] Process exited with code ${code}`);
+            const stripPath = (line: string): string => {
+                let cleaned = line.replace(new RegExp(projectDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '.');
+                cleaned = cleaned.replace(/[A-Z]:\\Users\\[^\s]+?\\AppData\\[^\s]+/gi, '...');
+                cleaned = cleaned.replace(/[A-Z]:\\Users\\[^\s]+?\\/gi, '~/');
+                cleaned = cleaned.replace(/\/home\/[^\s]+?\//gi, '~/');
+                cleaned = cleaned.replace(/\/usr\/local\/[^\s]+/gi, '/usr/...');
+                cleaned = cleaned.replace(/\/opt\/[^\s]+/gi, '/opt/...');
+                return cleaned;
+            };
+
+            child.stdout?.on('data', (data: Buffer) => {
+                const lines = data.toString().split('\n').filter(l => l.trim());
+                lines.forEach(line => logs.push(`[${new Date().toISOString()}] ${stripPath(line)}`));
+            });
+
+            child.stderr?.on('data', (data: Buffer) => {
+                const lines = data.toString().split('\n').filter(l => l.trim());
+                lines.forEach(line => logs.push(`[${new Date().toISOString()}] [ERR] ${stripPath(line)}`));
+            });
+
+            child.on('close', (code: number) => {
+                logs.push(`[${new Date().toISOString()}] Process exited with code ${code}`);
+                const session = activeBotSessions.get(sessionId);
+                if (session) {
+                    session.status = code === 0 ? 'stopped' : 'error';
+                }
+            });
+
+            child.on('error', (err: any) => {
+                logs.push(`[${new Date().toISOString()}] [ERROR] ${err.message}`);
+                const session = activeBotSessions.get(sessionId);
+                if (session) session.status = 'error';
+            });
+
+            // Auto-kill after maxMinutes
+            const timeout = setTimeout(() => {
+                logs.push(`[${new Date().toISOString()}] Session time limit reached. Stopping...`);
+                child.kill();
+                const session = activeBotSessions.get(sessionId);
+                if (session) session.status = 'stopped';
+            }, maxMinutes * 60 * 1000);
+
             const session = activeBotSessions.get(sessionId);
             if (session) {
-                session.status = code === 0 ? 'stopped' : 'error';
+                session.process = child;
+                session.status = 'running';
+                session.timeout = timeout;
             }
-        });
+        };
 
-        child.on('error', (err) => {
-            logs.push(`[${new Date().toISOString()}] [ERROR] ${err.message}`);
-            const session = activeBotSessions.get(sessionId);
-            if (session) session.status = 'error';
-        });
-
-        // Auto-kill after maxMinutes
-        const timeout = setTimeout(() => {
-            logs.push(`[${new Date().toISOString()}] Session time limit reached. Stopping...`);
-            child.kill();
-            const session = activeBotSessions.get(sessionId);
-            if (session) session.status = 'stopped';
-        }, maxMinutes * 60 * 1000);
-
-        activeBotSessions.set(sessionId, {
-            process: child,
-            logs,
-            status: 'running',
-            startedAt: Date.now(),
-            timeout
-        });
-
-        res.json({ success: true, message: 'Bot started' });
+        // Install dependencies async, then spawn
+        (async () => {
+            try {
+                if (language === 'python' || language === 'py') {
+                    if (fs.existsSync(path.join(projectDir, 'requirements.txt'))) {
+                        logs.push(`[${new Date().toISOString()}] Installing Python dependencies...`);
+                        try {
+                            execSync('py -m pip install -r requirements.txt --quiet', { cwd: projectDir, timeout: 120000, stdio: 'pipe' });
+                            logs.push(`[${new Date().toISOString()}] Dependencies installed`);
+                        } catch (e: any) {
+                            logs.push(`[${new Date().toISOString()}] [ERR] pip install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
+                        }
+                    }
+                } else if (language === 'javascript' || language === 'js' || language === 'typescript' || language === 'ts') {
+                    if (fs.existsSync(path.join(projectDir, 'package.json'))) {
+                        logs.push(`[${new Date().toISOString()}] Installing Node.js dependencies...`);
+                        try {
+                            execSync('npm install --production', { cwd: projectDir, timeout: 60000, stdio: 'pipe' });
+                            logs.push(`[${new Date().toISOString()}] Dependencies installed`);
+                        } catch (e: any) {
+                            logs.push(`[${new Date().toISOString()}] [ERR] npm install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
+                        }
+                    }
+                } else if (language === 'ruby') {
+                    if (fs.existsSync(path.join(projectDir, 'Gemfile'))) {
+                        logs.push(`[${new Date().toISOString()}] Installing Ruby dependencies...`);
+                        try {
+                            execSync('bundle install', { cwd: projectDir, timeout: 120000, stdio: 'pipe' });
+                            logs.push(`[${new Date().toISOString()}] Dependencies installed`);
+                        } catch (e: any) {
+                            logs.push(`[${new Date().toISOString()}] [ERR] bundle install failed: ${e.message?.slice(0, 200) || 'unknown error'}`);
+                        }
+                    }
+                }
+                spawnBot();
+            } catch (err: any) {
+                logs.push(`[${new Date().toISOString()}] [ERROR] Install failed: ${err.message}`);
+                const session = activeBotSessions.get(sessionId);
+                if (session) session.status = 'error';
+            }
+        })();
     } catch (error: any) {
         console.error('[Bot Console] Start error:', error.message);
         res.status(500).json({ error: error.message || 'Failed to start bot' });
