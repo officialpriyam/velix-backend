@@ -42,9 +42,21 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 app.use(cookieParser());
 
-// Request logger
+// Request logger with IP and details
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    const start = Date.now();
+    const ip = req.headers['x-forwarded-for'] as string || req.headers['x-real-ip'] as string || req.socket?.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || '-';
+    const origin = req.headers['origin'] || req.headers['referer'] || '-';
+
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        const status = res.statusCode;
+        const statusColor = status >= 500 ? '\x1b[31m' : status >= 400 ? '\x1b[33m' : status >= 300 ? '\x1b[36m' : '\x1b[32m';
+        const reset = '\x1b[0m';
+        console.log(`[${new Date().toISOString()}] ${statusColor}${status}${reset} ${req.method} ${req.url} | IP: ${ip} | ${duration}ms | Origin: ${origin}`);
+    });
+
     next();
 });
 
