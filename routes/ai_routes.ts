@@ -660,8 +660,7 @@ interface BotSession {
 const activeBotSessions = new Map<string, BotSession>();
 
 router.post('/bot/start', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
-    const { sessionId, botToken, language, maxMinutes = 10 } = req.body;
-    if (!botToken) return res.status(400).json({ error: 'Bot token is required' });
+    const { sessionId, language, maxMinutes = 10 } = req.body;
 
     // Stop any existing session for this project
     if (activeBotSessions.has(sessionId)) {
@@ -675,41 +674,94 @@ router.post('/bot/start', asyncHandler(requireAuth), asyncHandler(async (req, re
     const projectDir = path.join(sandboxRoot, sessionId);
 
     try {
-        // Determine run command based on language
-        let runCmd: string;
-        let runArgs: string[];
-        const env = { ...process.env, DISCORD_TOKEN: botToken, NODE_ENV: 'production' };
+        // Read bot token from .env file in project
+        const fs = require('fs');
+        let botToken = '';
+        const envPath = path.join(projectDir, '.env');
+        if (fs.existsSync(envPath)) {
+            const envContent = fs.readFileSync(envPath, 'utf-8');
+            const tokenMatch = envContent.match(/(?:DISCORD_TOKEN|TOKEN)\s*=\s*(.+)/i);
+            if (tokenMatch) botToken = tokenMatch[1].trim().replace(/^["']|["']$/g, '');
+        }
 
-        if (language === 'python' || language === 'py') {
-            runCmd = 'python3';
-            runArgs = ['bot.py'];
-        } else if (language === 'javascript' || language === 'js' || language === 'typescript' || language === 'ts') {
-            // Check for package.json and install if needed
-            const { execSync } = require('child_process');
-            try {
-                if (require('fs').existsSync(path.join(projectDir, 'package.json'))) {
-                    execSync('npm install --production 2>/dev/null', { cwd: projectDir, timeout: 30000 });
-                }
-            } catch {}
-            runCmd = 'node';
-            runArgs = ['bot.js'];
-        } else if (language === 'ruby') {
-            runCmd = 'ruby';
-            runArgs = ['bot.rb'];
-        } else {
-            runCmd = 'node';
-            runArgs = ['bot.js'];
+        // Also check config.json
+        if (!botToken) {
+            const configPath = path.join(projectDir, 'config.json');
+            if (fs.existsSync(configPath)) {
+                try {
+                    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+                    botToken = config.token || config.DISCORD_TOKEN || '';
+                } catch {}
+            }
+        }
+
+        if (!botToken) {
+            return res.status(400).json({ error: 'No bot token found. Add DISCORD_TOKEN=your_token to your .env file.' });
         }
 
         const logs: string[] = [];
         logs.push(`[${new Date().toISOString()}] Starting bot session...`);
         logs.push(`[${new Date().toISOString()}] Language: ${language}`);
+        logs.push(`[${new Date().toISOString()}] Token loaded from .env`);
         logs.push(`[${new Date().toISOString()}] Session limit: ${maxMinutes} minutes`);
+
+        // Determine run command based on language
+        let runCmd: string;
+        let runArgs: string[];
+        const env = { ...process.env, DISCORD_TOKEN: botToken, TOKEN: botToken, NODE_ENV: 'production' };
+
+        // Find node executable path on Windows
+        const findNodePath = (): string => {
+            if (process.platform === 'win32') {
+                return process.execPath;
+            }
+            return 'node';
+        };
+
+        if (language === 'python' || language === 'py') {
+            runCmd = 'python3';
+            runArgs = ['bot.py'];
+            if (!fs.existsSync(path.join(projectDir, 'bot.py'))) {
+                return res.status(400).json({ error: 'bot.py not found in project' });
+            }
+        } else if (language === 'javascript' || language === 'js' || language === 'typescript' || language === 'ts') {
+            // Install dependencies if package.json exists
+            const { execSync } = require('child_process');
+            try {
+                if (fs.existsSync(path.join(projectDir, 'package.json'))) {
+                    logs.push(`[${new Date().toISOString()}] Installing dependencies...`);
+                    execSync('npm install --production', { cwd: projectDir, timeout: 60000, stdio: 'pipe' });
+                }
+            } catch {}
+
+            const botFile = fs.existsSync(path.join(projectDir, 'bot.ts')) ? 'bot.ts' : 'bot.js';
+            if (!fs.existsSync(path.join(projectDir, botFile))) {
+                return res.status(400).json({ error: `${botFile} not found in project` });
+            }
+
+            if (botFile.endsWith('.ts')) {
+                runCmd = findNodePath();
+                runArgs = ['--require', 'ts-node/register', botFile];
+            } else {
+                runCmd = findNodePath();
+                runArgs = [botFile];
+            }
+        } else if (language === 'ruby') {
+            runCmd = 'ruby';
+            runArgs = ['bot.rb'];
+            if (!fs.existsSync(path.join(projectDir, 'bot.rb'))) {
+                return res.status(400).json({ error: 'bot.rb not found in project' });
+            }
+        } else {
+            runCmd = findNodePath();
+            runArgs = ['bot.js'];
+        }
 
         const child = spawn(runCmd, runArgs, {
             cwd: projectDir,
             env,
-            stdio: ['pipe', 'pipe', 'pipe']
+            stdio: ['pipe', 'pipe', 'pipe'],
+            shell: process.platform === 'win32'
         });
 
         child.stdout?.on('data', (data: Buffer) => {
