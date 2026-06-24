@@ -670,7 +670,7 @@ router.patch('/projects/:id/settings', asyncHandler(requireAuth), asyncHandler(a
 interface BotSession {
     process: ChildProcess;
     logs: string[];
-    status: 'running' | 'stopped' | 'error';
+    status: 'starting' | 'running' | 'stopped' | 'error';
     startedAt: number;
     timeout: NodeJS.Timeout;
 }
