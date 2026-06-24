@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import axios from 'axios';
 import fs from 'fs';
+import { spawn, ChildProcess } from 'child_process';
+import path from 'path';
+import os from 'os';
 import config from '../utils/config';
 import { generateCode, enhancePrompt } from '../services/AIService';
 import { CodeGenerationService } from '../services/CodeGenerationService';
@@ -640,10 +643,6 @@ router.patch('/projects/:id/settings', asyncHandler(requireAuth), asyncHandler(a
 }));
 
 // ─── Bot Console (Discord bot test runner) ───
-import { spawn, ChildProcess } from 'child_process';
-import path from 'path';
-import os from 'os';
-
 interface BotSession {
     process: ChildProcess;
     logs: string[];
