@@ -840,7 +840,6 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
         };
 
         // Install dependencies async, then spawn
-        const { spawn: spawnFn } = require('child_process');
 
         const runInstall = (cmd: string, args: string[], label: string): Promise<boolean> => {
             return new Promise((resolve) => {
