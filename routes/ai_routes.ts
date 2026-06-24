@@ -453,6 +453,55 @@ router.patch('/projects/:id/visibility', asyncHandler(requireAuth), asyncHandler
     }
 }));
 
+// ─── Private Share Link ───
+router.post('/projects/:id/share-token', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    try {
+        const project = await dbService.getProjectById(id);
+        if (!project || project.user_id !== req.auth!.userId) {
+            return res.status(403).json({ error: 'Not authorized' });
+        }
+        if (project.share_token) {
+            return res.json({ token: project.share_token, url: `/s/${project.share_token}` });
+        }
+        const token = await dbService.generateShareToken(id, req.auth!.userId);
+        res.json({ token, url: `/s/${token}` });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+}));
+
+router.delete('/projects/:id/share-token', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    try {
+        await dbService.removeShareToken(id, req.auth!.userId);
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+}));
+
+router.get('/shared/:token', asyncHandler(async (req, res) => {
+    const { token } = req.params;
+    try {
+        const project = await dbService.getProjectByShareToken(token);
+        if (!project) return res.status(404).json({ error: 'Invalid or expired link' });
+        const user = await dbService.getUserById(project.user_id);
+        res.json({
+            project: {
+                id: project.id,
+                name: project.name,
+                language: project.language,
+                last_updated: project.last_updated,
+                thumbnail: project.thumbnail,
+                author_name: user?.display_name || user?.name || 'Unknown'
+            }
+        });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+}));
+
 // ─── Team Members ───
 router.get('/projects/:id/team', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
     try {

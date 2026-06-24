@@ -177,6 +177,21 @@ class DatabaseService {
         return this.update('projects', { id: projectId, user_id: userId }, { is_public: isPublic ? 1 : 0 });
     }
 
+    public async generateShareToken(projectId: string, userId: string): Promise<string> {
+        const token = require('crypto').randomBytes(16).toString('hex');
+        await this.update('projects', { id: projectId, user_id: userId }, { share_token: token });
+        return token;
+    }
+
+    public async removeShareToken(projectId: string, userId: string) {
+        return this.update('projects', { id: projectId, user_id: userId }, { share_token: null });
+    }
+
+    public async getProjectByShareToken(token: string) {
+        const rows = await this.request<any[]>('projects', { method: 'GET', filters: { share_token: token } });
+        return rows?.[0] || null;
+    }
+
     public async renameProject(projectId: string, userId: string, newName: string) {
         return this.update('projects', { id: projectId, user_id: userId }, {
             name: newName,
