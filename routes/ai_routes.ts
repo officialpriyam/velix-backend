@@ -677,7 +677,8 @@ interface BotSession {
 
 const activeBotSessions = new Map<string, BotSession>();
 
-router.post('/bot/start', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
+    try {
     const { sessionId, language, maxMinutes = 10 } = req.body;
 
     // Stop any existing session for this project
@@ -691,7 +692,6 @@ router.post('/bot/start', asyncHandler(requireAuth), asyncHandler(async (req, re
     const sandbox = new SandboxContext(sessionId);
     const projectDir = sandbox.getRootDir();
 
-    try {
         // Read bot token from .env file in project
         const fs = require('fs');
         let botToken = '';
@@ -825,11 +825,12 @@ router.post('/bot/start', asyncHandler(requireAuth), asyncHandler(async (req, re
         res.json({ success: true, message: 'Bot started' });
     } catch (error: any) {
         console.error('[Bot Console] Start error:', error.message);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: error.message || 'Failed to start bot' });
     }
-}));
+});
 
-router.post('/bot/stop/:sessionId', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+router.post('/bot/stop/:sessionId', asyncHandler(requireAuth), async (req, res) => {
+    try {
     const { sessionId } = req.params;
     const session = activeBotSessions.get(sessionId);
     if (!session) return res.json({ success: true, message: 'No active session' });
@@ -843,14 +844,21 @@ router.post('/bot/stop/:sessionId', asyncHandler(requireAuth), asyncHandler(asyn
     setTimeout(() => activeBotSessions.delete(sessionId), 60000);
 
     res.json({ success: true });
-}));
+    } catch (error: any) {
+        res.status(500).json({ error: error.message || 'Failed to stop bot' });
+    }
+});
 
-router.get('/bot/logs/:sessionId', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
+router.get('/bot/logs/:sessionId', asyncHandler(requireAuth), async (req, res) => {
+    try {
     const { sessionId } = req.params;
     const session = activeBotSessions.get(sessionId);
     if (!session) return res.json({ logs: [], status: 'stopped' });
 
     res.json({ logs: session.logs, status: session.status });
-}));
+    } catch (error: any) {
+        res.status(500).json({ error: error.message || 'Failed to get logs' });
+    }
+});
 
 export default router;
