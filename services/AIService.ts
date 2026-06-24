@@ -327,40 +327,90 @@ ${isPython ? `1. Use discord.py 2.x (pip install discord.py)
 6. Use proper async/await with try/catch
 7. Include package.json with discord.js dependency`}
 
-## OUTPUT FORMAT (MANDATORY)
+## OUTPUT FORMAT (MANDATORY — YOU MUST GENERATE ALL THESE FILES)
+You MUST generate a MINIMUM of 3 files. Every bot needs these files to work.
+
 For EACH file, output exactly:
 FILE: ${isPython ? 'bot.py' : isRuby ? 'bot.rb' : 'bot.' + ext.replace('.', '')}
 \`\`\`${codeLang}
-[complete file content]
+[complete file content — NO placeholders, NO "your_token_here", include ALL code]
+\`\`\`
+
+FILE: .env
+\`\`\`
+DISCORD_TOKEN=your_bot_token_here
+${isJs || isTs ? 'CLIENT_ID=your_application_client_id\n' : ''}PORT=3000
 \`\`\`
 
 ${isPython ? `FILE: requirements.txt
 \`\`\`
 discord.py>=2.0.0
 python-dotenv>=1.0.0
+\`\`\`
+
+FILE: README.md
+\`\`\`markdown
+# Discord Bot
+
+## Setup
+1. Create a bot at https://discord.com/developers/applications
+2. Copy the bot token
+3. Edit .env and replace your_bot_token_here with your token
+4. Run: pip install -r requirements.txt
+5. Run: python bot.py
 \`\`\`` : isRuby ? `FILE: Gemfile
 \`\`\`ruby
 source 'https://rubygems.org'
 gem 'discordrb', '~> 3.5'
+\`\`\`
+
+FILE: README.md
+\`\`\`markdown
+# Discord Bot
+
+## Setup
+1. Create a bot at https://discord.com/developers/applications
+2. Copy the bot token
+3. Edit .env and replace your_bot_token_here with your token
+4. Run: bundle install
+5. Run: ruby bot.rb
 \`\`\`` : `FILE: package.json
 \`\`\`json
 {
   "name": "discord-bot",
   "version": "1.0.0",
   "main": "bot.${ext.replace('.', '')}",
+  "scripts": {
+    "start": "node bot.${ext.replace('.', '')}"
+  },
   "dependencies": {
     "discord.js": "^14.11.0",
     "dotenv": "^16.0.0"
   }
 }
+\`\`\`
+
+FILE: README.md
+\`\`\`markdown
+# Discord Bot
+
+## Setup
+1. Create a bot at https://discord.com/developers/applications
+2. Copy the bot token and client ID
+3. Edit .env and replace your_bot_token_here with your token
+4. Run: npm install
+5. Run: npm start
 \`\`\``}
 
 ## CODE RULES
-- Complete, runnable code — NO placeholders, NO TODOs
+- Complete, runnable code — NO placeholders, NO TODOs, NO "add your token here"
+- The bot token is ALWAYS loaded from .env via process.env.DISCORD_TOKEN — NEVER hardcode tokens
+- ${isPython ? 'Use `from dotenv import load_dotenv; load_dotenv()` at the TOP of bot.py before importing discord' : isRuby ? 'Use `require "dotenv/load"` at the TOP of bot.rb before requiring discordrb' : 'Use `require("dotenv").config()` at the TOP of bot.js before requiring discord.js'}
 - Include error handling (try/catch or begin/rescue)
 - Include command examples and help text
 - Use environment variables for bot token (process.env.DISCORD_TOKEN)
 - Include proper event handlers (ready, message, interactionCreate)
+- Bot MUST be fully functional and connect to Discord on first run
 
 ## RESPONSE FORMAT
 - Output ONLY file blocks with FILE: header and code fences
@@ -744,7 +794,7 @@ Return ONLY the enhanced specification. NO commentary, NO explanations.
 2. **${platform === 'discord' ? 'Bot Name' : 'Package Name'}** ${platform === 'discord' ? '(Discord bot application name)' : '(for plugins only): Derived from project name (NOT com.example)'}
 3. **Features List**: Every feature the ${modeLabel} must have, with brief descriptions
 4. **File Structure**: List EVERY file that needs to be created with its full path:
-   ${isConfig ? '- config.yml (main plugin config with ALL settings)\n   - messages.yml (localization strings)\n   - (any additional config files needed)' : isDatapack ? '- pack.mcmeta\n   - data/<namespace>/function/main.mcfunction\n   - data/<namespace>/function/tick.mcfunction\n   - data/<namespace>/tags/function/load.json\n   - data/<namespace>/tags/function/tick.json\n   - (any additional functions, advancements, loot tables, recipes, predicates)' : isScripting ? '- data/<namespace>/function/script.mcfunction\n   - (any additional .mcfunction or .sh files)' : platform === 'discord' ? (langLabel === 'Python' ? '- bot.py (main bot file)\n   - requirements.txt\n   - .env (with DISCORD_TOKEN)' : langLabel === 'Ruby' ? '- bot.rb (main bot file)\n   - Gemfile\n   - .env (with DISCORD_TOKEN)' : '- bot.js or bot.ts (main bot file)\n   - package.json\n   - .env (with DISCORD_TOKEN)') : '- src/main/java/com/xxx/MainPlugin.java\n   - src/main/resources/plugin.yml\n   - pom.xml (for Java) or build.gradle.kts (for Kotlin)\n   - Any additional classes, configs, etc.'}
+   ${isConfig ? '- config.yml (main plugin config with ALL settings)\n   - messages.yml (localization strings)\n   - (any additional config files needed)' : isDatapack ? '- pack.mcmeta\n   - data/<namespace>/function/main.mcfunction\n   - data/<namespace>/function/tick.mcfunction\n   - data/<namespace>/tags/function/load.json\n   - data/<namespace>/tags/function/tick.json\n   - (any additional functions, advancements, loot tables, recipes, predicates)' : isScripting ? '- data/<namespace>/function/script.mcfunction\n   - (any additional .mcfunction or .sh files)' : platform === 'discord' ? (langLabel === 'Python' ? '- bot.py (main bot with ALL commands, events, error handling)\n   - .env (DISCORD_TOKEN=your_token_here)\n   - requirements.txt (discord.py, python-dotenv)\n   - README.md (setup instructions)' : langLabel === 'Ruby' ? '- bot.rb (main bot with ALL commands, events, error handling)\n   - .env (DISCORD_TOKEN=your_token_here)\n   - Gemfile (discordrb gem)\n   - README.md (setup instructions)' : '- bot.js or bot.ts (main bot with ALL commands, events, error handling)\n   - .env (DISCORD_TOKEN=your_token_here)\n   - package.json (discord.js, dotenv dependencies)\n   - README.md (setup instructions)') : '- src/main/java/com/xxx/MainPlugin.java\n   - src/main/resources/plugin.yml\n   - pom.xml (for Java) or build.gradle.kts (for Kotlin)\n   - Any additional classes, configs, etc.'}
 5. **Build System** ${platform === 'discord' ? '(dependency file)' : '(plugins only)'}: Specify exactly:
    ${platform === 'discord' ? (langLabel === 'Python' ? '- requirements.txt with discord.py' : langLabel === 'Ruby' ? '- Gemfile with discordrb' : '- package.json with discord.js') : '- Java: pom.xml with paper-api dependency, Java 21\n   - Kotlin: build.gradle.kts with kotlin-jvm plugin, paper-api'}
 6. **Configuration Options** ${platform === 'discord' ? '(bot settings)' : '(for config mode)'}: List ALL config options with types, defaults, and descriptions
@@ -754,6 +804,7 @@ Return ONLY the enhanced specification. NO commentary, NO explanations.
 - Be SPECIFIC about file names, setting names, command syntax, config keys
 - Include actual config keys / command syntax from the documentation if available
 - Ensure the file structure is COMPLETE — every file needed
+- ${platform === 'discord' ? 'DISCORD BOT RULES: You MUST include .env file with DISCORD_TOKEN=your_token_here. You MUST include README.md with setup instructions. The bot code MUST use dotenv to load the token from .env.' : ''}
 - Keep it concise but comprehensive — this spec will be fed to a code generator
 
 ${platformContext ? `\n\nAVAILABLE DOCUMENTATION AND SKILLS:\n${platformContext.slice(0, 3000)}\n\nUse the above docs and skills as reference when enhancing the prompt. Incorporate relevant API patterns, config keys, and best practices.` : ''}`;
