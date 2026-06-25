@@ -788,7 +788,7 @@ export const enhancePrompt = async (prompt: string, platform?: string, language?
     else if (isScripting) modeLabel = 'command scripting';
     else if (platform === 'discord') modeLabel = 'Discord bot';
 
-    const langLabel = language === 'python' || language === 'py' ? 'Python' : language === 'ruby' ? 'Ruby' : language === 'typescript' || language === 'ts' ? 'TypeScript' : language === 'javascript' || language === 'js' ? 'JavaScript' : 'Java';
+    const langLabel = language === 'python' || language === 'py' ? 'Python' : language === 'ruby' ? 'Ruby' : language === 'kotlin' || language === 'kt' ? 'Kotlin' : language === 'typescript' || language === 'ts' ? 'TypeScript' : language === 'javascript' || language === 'js' ? 'JavaScript' : 'Java';
 
     const model = "openai/gpt-oss-20b:free";
     const systemPrompt = `You are an expert ${platformLabel} architect. Your job is to take a brief user request and transform it into a DETAILED, COMPLETE technical specification that an AI code generator can use to produce PRODUCTION-READY ${modeLabel} files on the FIRST attempt.
