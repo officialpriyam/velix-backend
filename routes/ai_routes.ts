@@ -668,7 +668,7 @@ router.patch('/projects/:id/settings', asyncHandler(requireAuth), asyncHandler(a
 
 // ─── Bot Console (Discord bot test runner) ───
 interface BotSession {
-    process: ChildProcess;
+    process: ChildProcess | null;
     logs: string[];
     status: 'starting' | 'running' | 'stopped' | 'error';
     startedAt: number;
