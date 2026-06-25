@@ -204,7 +204,7 @@ export class CodeGenerationService {
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.kodari</groupId>
+    <groupId>com.velix</groupId>
     <artifactId>generated-project</artifactId>
     <version>1.0-SNAPSHOT</version>
 
@@ -238,7 +238,7 @@ export class CodeGenerationService {
     application
 }
 
-group = "com.kodari"
+group = "com.velix"
 version = "1.0-SNAPSHOT"
 
 repositories {
@@ -311,11 +311,11 @@ gem 'dotenv'
 
     private static getDefaultHytaleManifest(): string {
         return JSON.stringify({
-            "Group": "com.kodari",
+            "Group": "com.velix",
             "Name": "GeneratedPlugin",
             "Authors": [{ "Name": "VelixUser" }],
             "Version": "1.0.0",
-            "Main": "com.kodari.Main",
+            "Main": "com.velix.Main",
             "ServerVersion": "*"
         }, null, 2);
     }
@@ -325,7 +325,7 @@ gem 'dotenv'
     id("java")
 }
 
-group = "com.kodari"
+group = "com.velix"
 version = "1.0-SNAPSHOT"
 
 repositories {

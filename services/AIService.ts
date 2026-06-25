@@ -70,7 +70,7 @@ export const generateCode = async (
         }
 
         // Load relevant Velix documentation context based on prompt and model
-        const kodariDocs = skipDocs ? "" : await loadDocumentationContext(prompt, modelName);
+        const docsContent = skipDocs ? "" : await loadDocumentationContext(prompt, modelName);
 
         // Load platform-specific skills (Hytale, Minecraft, etc.) — filtered by prompt relevance
         const skillsContext = platform ? SkillsService.getFilteredSkillsContext(platform, prompt) : '';
@@ -78,9 +78,9 @@ export const generateCode = async (
         // Cap context sizes to avoid exceeding model context windows
         const MAX_DOCS_CHARS = 6000;
         const MAX_SKILLS_CHARS = 4000;
-        const cappedDocs = kodariDocs.length > MAX_DOCS_CHARS ? kodariDocs.slice(0, MAX_DOCS_CHARS) + '\n[... truncated ...]' : kodariDocs;
+        const cappedDocs = docsContent.length > MAX_DOCS_CHARS ? docsContent.slice(0, MAX_DOCS_CHARS) + '\n[... truncated ...]' : docsContent;
         const cappedSkills = skillsContext.length > MAX_SKILLS_CHARS ? skillsContext.slice(0, MAX_SKILLS_CHARS) + '\n[... truncated ...]' : skillsContext;
-        console.log(`[AIService] Context sizes - Docs: ${cappedDocs.length}/${kodariDocs.length} chars, Skills: ${cappedSkills.length}/${skillsContext.length} chars`);
+        console.log(`[AIService] Context sizes - Docs: ${cappedDocs.length}/${docsContent.length} chars, Skills: ${cappedSkills.length}/${skillsContext.length} chars`);
 
         // Enhanced system prompt for better code generation
         const isKotlin = prompt.toLowerCase().includes('kotlin') || prompt.toLowerCase().includes('.kt');
@@ -552,7 +552,7 @@ ${cappedSkills}`;
                     headers: {
                         "Authorization": `Bearer ${apiKey}`,
                         "Content-Type": "application/json",
-                        "HTTP-Referer": "https://kodari-clone.local",
+                        "HTTP-Referer": "https://velix.snapgrids.store",
                         "X-Title": "Velix"
                     },
                     timeout: 120000
@@ -601,7 +601,7 @@ ${cappedSkills}`;
                         headers: {
                             "Authorization": `Bearer ${apiKey}`,
                             "Content-Type": "application/json",
-                            "HTTP-Referer": "https://kodari-clone.local",
+                            "HTTP-Referer": "https://velix.snapgrids.store",
                             "X-Title": "Velix"
                         },
                         timeout: 120000
@@ -638,7 +638,7 @@ ${cappedSkills}`;
                     headers: {
                         "Authorization": `Bearer ${apiKey}`,
                         "Content-Type": "application/json",
-                        "HTTP-Referer": "https://kodari-clone.local",
+                        "HTTP-Referer": "https://velix.snapgrids.store",
                         "X-Title": "Velix"
                     },
                     timeout: 120000
@@ -655,7 +655,7 @@ ${cappedSkills}`;
                 headers: {
                     "Authorization": `Bearer ${apiKey}`,
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "https://kodari-clone.local",
+                    "HTTP-Referer": "https://velix.snapgrids.store",
                     "X-Title": "Velix"
                 },
                 timeout: 120000
@@ -839,7 +839,7 @@ ${platformContext ? `\n\nAVAILABLE DOCUMENTATION AND SKILLS:\n${platformContext.
                 headers: {
                     "Authorization": `Bearer ${apiKey}`,
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "https://kodari.app",
+                    "HTTP-Referer": "https://velix.snapgrids.store",
                     "X-Title": "Velix AI"
                 },
                 timeout: 45000

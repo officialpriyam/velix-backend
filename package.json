@@ -1,5 +1,5 @@
 {
-  "name": "kodari-backend",
+  "name": "velix-backend",
   "version": "1.0.0",
   "description": "Backend for Velix AI coding app",
   "main": "src/server.ts",
