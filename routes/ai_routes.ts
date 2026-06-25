@@ -672,7 +672,7 @@ interface BotSession {
     logs: string[];
     status: 'starting' | 'running' | 'stopped' | 'error';
     startedAt: number;
-    timeout: NodeJS.Timeout;
+    timeout: NodeJS.Timeout | null;
 }
 
 const activeBotSessions = new Map<string, BotSession>();
@@ -685,7 +685,9 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
     // Stop any existing session for this project
     if (activeBotSessions.has(sessionId)) {
         const existing = activeBotSessions.get(sessionId)!;
-        existing.process.kill();
+        if (existing.process) {
+            try { existing.process.kill(); } catch {}
+        }
         clearTimeout(existing.timeout);
         activeBotSessions.delete(sessionId);
     }
