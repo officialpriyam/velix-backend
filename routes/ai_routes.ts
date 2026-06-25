@@ -830,9 +830,18 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
             // Auto-kill after maxMinutes
             const timeout = setTimeout(() => {
                 logs.push(`[${new Date().toISOString()}] Session time limit reached. Stopping...`);
-                child.kill();
+                try {
+                    if (process.platform === 'win32') {
+                        const { execSync } = require('child_process');
+                        try { execSync(`taskkill /F /T /PID ${child.pid}`, { stdio: 'pipe' }); } catch {}
+                    }
+                    child.kill('SIGKILL');
+                } catch {}
                 const session = activeBotSessions.get(sessionId);
-                if (session) session.status = 'stopped';
+                if (session) {
+                    session.status = 'stopped';
+                    session.process = null;
+                }
             }, maxMinutes * 60 * 1000);
 
             const session = activeBotSessions.get(sessionId);
@@ -914,9 +923,18 @@ router.post('/bot/stop/:sessionId', asyncHandler(requireAuth), async (req, res) 
     const session = activeBotSessions.get(sessionId);
     if (!session) return res.json({ success: true, message: 'No active session' });
 
-    session.process.kill();
+    if (session.process) {
+        try {
+            if (process.platform === 'win32') {
+                const { execSync } = require('child_process');
+                try { execSync(`taskkill /F /T /PID ${session.process.pid}`, { stdio: 'pipe' }); } catch {}
+            }
+            session.process.kill('SIGKILL');
+        } catch {}
+    }
     clearTimeout(session.timeout);
     session.status = 'stopped';
+    session.process = null;
     session.logs.push(`[${new Date().toISOString()}] Bot stopped by user`);
 
     // Clean up after a delay
