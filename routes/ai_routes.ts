@@ -688,7 +688,7 @@ router.post('/bot/start', asyncHandler(requireAuth), async (req, res) => {
         if (existing.process) {
             try { existing.process.kill(); } catch {}
         }
-        clearTimeout(existing.timeout);
+        if (existing.timeout) clearTimeout(existing.timeout);
         activeBotSessions.delete(sessionId);
     }
 
@@ -934,7 +934,7 @@ router.post('/bot/stop/:sessionId', asyncHandler(requireAuth), async (req, res) 
             session.process.kill('SIGKILL');
         } catch {}
     }
-    clearTimeout(session.timeout);
+    if (session.timeout) clearTimeout(session.timeout);
     session.status = 'stopped';
     session.process = null;
     session.logs.push(`[${new Date().toISOString()}] Bot stopped by user`);
